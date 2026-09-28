@@ -675,7 +675,8 @@ function teaShop(x, y, door) {          // tables go out on two sidewalk tiles; 
   const [x2, y2] = door === 'E' ? [x, y + 1] : [x + 1, y];
   if (at(x2, y2) === WALK && seen(x + .5, y + .5) && free1(x2, y2)) teaVig(x, y, door);
 }
-function bench(x, y) { const s = spr(x, y + .3, x + .8, y + .6, 10, 3), g = s.g; box(g, x, y + .3, x + .8, y + .6, 2, 4, '#7A5C3E'); g.fillStyle = '#4A3726'; g.fillRect(sx(x + .1, y + .6), sy(x + .1, y + .6) - 2, 1, 2); }
+const benches = [];
+function bench(x, y) { benches.push([x + .4, y + .45]); const s = spr(x, y + .3, x + .8, y + .6, 10, 3), g = s.g; box(g, x, y + .3, x + .8, y + .6, 2, 4, '#7A5C3E'); g.fillStyle = '#4A3726'; g.fillRect(sx(x + .1, y + .6), sy(x + .1, y + .6) - 2, 1, 2); }
 function busStop(x, y, alongX) {
   const [a, b, c, d] = alongX ? [x, y + .3, x + 2, y + .8] : [x + .2, y, x + .7, y + 2], s = spr(a, b, c, d, 46, 4), g = s.g, e = glow(s);
   g.fillStyle = '#555';
@@ -819,6 +820,7 @@ function lots() {
   fill(0, 0, MW, MH, PLAZA, 0);
 }
 function props() {
+  for (let y = 91; y < 100; y++) for (let x = 88; x < 97; x++) used.add(x + ',' + y);   // an open lawn for the morning exercise group
   for (let n = 0; n < 90; n++) {                         // park trees
     const x = 70.5 + rnd() * 27, y = 89.5 + rnd() * 35;
     if ([at(x | 0, y | 0), at((x - 1) | 0, y | 0), at((x + 1) | 0, y | 0), at(x | 0, (y - 1) | 0), at(x | 0, (y + 1) | 0)].every(t => t === GRASS) && free1(x, y)) tree(q12(x), q12(y), 1.1 + rnd() * .7);
@@ -960,7 +962,8 @@ function rng(seed) {
 }
 const V = rng(2024);                                   // own random stream, so the buildings stay as they were
 const inWin = (m, w) => (w[0] <= w[1] ? m >= w[0] && m < w[1] : m >= w[0] || m < w[1]);
-const onNow = e => (Array.isArray(e.win[0]) ? e.win.some(w => inWin(mins, w)) : inWin(mins, e.win));
+const inWins = w => (Array.isArray(w[0]) ? w.some(v => inWin(mins, v)) : inWin(mins, w));
+const onNow = e => inWins(e.win);
 const jit = (w, n = 30) => [w[0] + Math.floor(V() * n), w[1] - Math.floor(V() * n)];   // people arrive and leave one by one
 const anchor = (c, ax, ay) => Object.assign(c, { ax, ay });
 function pix(w, h, fn) { const c = mk(w, h), g = c.getContext('2d'); fn((x, y, ww, hh, col) => { g.fillStyle = col; g.fillRect(x, y, ww, hh); }); return c; }
@@ -969,7 +972,7 @@ function thing(x0, y0, x1, y1, h, pad, draw) {         // a small iso object dra
 }
 function vig(x, y, pics, o = {}) {                     // seq: [[picture, seconds], …] played in a loop
   const seq = o.seq || [[0, 1]], tot = seq.reduce((a, q) => a + q[1], 0);
-  const e = { k: 'vig', x, y, z: o.z ?? 1, pics, seq, tot, ph: V() * tot, win: o.win, d: o.d || 0, r: 0, tick: o.tick, show: o.show, draw: o.draw };
+  const e = { k: 'vig', x, y, z: o.z ?? 1, pics, seq, tot, ph: o.ph ?? V() * tot, win: o.win, d: o.d || 0, r: 0, tick: o.tick, show: o.show, draw: o.draw };
   ents.push(e); return e;
 }
 function vigPic(e) { let t = (T + e.ph) % e.tot; for (const [i, d] of e.seq) { if (t < d) return e.pics[i]; t -= d; } return e.pics[0]; }
@@ -1158,6 +1161,65 @@ function riverside() {
   });
 }
 
+// around Sule: money changers calling out, a lottery-ticket board, a child feeding the pigeons
+const ringPt = deg => [CX + 9.1 * Math.cos(deg * rad), CY + 9.1 * Math.sin(deg * rad)];   // on the ring sidewalk, y is south
+const lotteryBoard = () => thing(-.05, -.3, .05, .3, 24, 3, g => {
+  g.fillStyle = '#5A4632'; for (const v of [-.25, .25]) g.fillRect(sx(0, v), sy(0, v, 1) - 18, 1, 18);
+  wF(g, 0, -.3, .3, 8, 20, '#F4F1E8');
+  for (let z = 10; z < 19; z += 3) for (let v = -.27; v < .27; v += 1 / 12) wF(g, 0, v, v + 1 / 12, z, z + 2, V.pick(['#E53935', '#1E88E5', '#43A047', '#FDD835', '#8E24AA', '#FB8C00']));
+});
+function suleLife() {
+  for (const deg of [118, 152]) {                                 // money changers: "change, change"
+    const [x, y] = ringPt(deg), L = look('man');
+    if (seen(x, y)) vig(x, y, [standing(L, 'idle', false), standing(L, 'wave', false)], { win: jit([480, 1080], 40), seq: [[0, 2 + V() * 3], [1, .9], [0, 1 + V() * 2], [1, .7]] });
+  }
+  { const [x, y] = ringPt(40), L = look('woman'), win = jit([450, 1140], 30);    // lottery seller beside her board
+    vig(x + .25, y, [lotteryBoard()], { z: 0, win });
+    vig(x - .15, y + .1, [stool(V.pick(STOOLS))], { z: 0, d: -.02, win });
+    vig(x - .15, y + .1, [seated(L, 'fan', false), seated(L, 'fan2', false)], { win, seq: [[0, .7], [1, .7], [0, .7], [1, .7], [0, 3 + V() * 3]] }); }
+  { const [x, y] = ringPt(135), win = [[jit([420, 630])[0], 630], [930, jit([930, 1080])[1]]];   // a child throwing grain, a parent watching
+    const K = look(), M = look('woman');
+    vig(x, y, [kid(K, 'idle'), kid(K, 'throw')], { win, seq: [[0, 1.6 + V()], [1, .6]] });
+    vig(x + .3, y - .25, [standing(M, 'idle', false), standing(M, 'idle2', false)], { win, seq: [[0, 4], [1, 1.5]] });
+    const fx = x + .6, fy = y + .6;                                 // grain lands in front of the child
+    for (const e of ents) if (e.k === 'pig' && Math.hypot(e.hx - CX, e.hy - CY) < 10.5) { e.feed = [fx, fy]; e.fwin = win; }
+    for (let i = 0; i < 10; i++) ents.push({ k: 'pig', x: fx, y: fy, hx: fx, hy: fy, t: V() * 2, r: 0, feed: [fx, fy], fwin: win, win: win.map(w => jit(w, 25)) }); }
+}
+
+// Maha Bandula Park: early joggers and a group of elders exercising; couples under an umbrella in the evening
+const umbrellaPair = (A, B, lean) => {
+  const a = seated(A, 'sit', false), b = seated(B, lean ? 'lean' : 'sit', false), c = mk(14, 17), g = c.getContext('2d');
+  g.drawImage(a, 0, 6); g.drawImage(b, 5, 6);
+  const u = V.pick(['#C62828', '#1565C0', '#2E7D32', '#6A1B9A', '#F9A825']);
+  g.fillStyle = sh(u, .75); g.fillRect(1, 2, 12, 1); g.fillStyle = u; g.fillRect(2, 1, 10, 1); g.fillRect(4, 0, 6, 1);
+  g.fillStyle = '#3A3A3A'; g.fillRect(7, 3, 1, 4);
+  return anchor(c, 6, 16);
+};
+function parkLife() {
+  const loop = [[80.3, 103.3], [88.7, 103.3], [88.7, 111.7], [80.3, 111.7]], per = 33.6;
+  for (let i = 0; i < 4; i++) {                                   // joggers circle the monument
+    const L = look(); L.tuck = 1; L.low = '#2B2B2B'; L.shirt = V.pick(['#FFFFFF', '#E06666', '#6FA8DC', '#FFD966']);
+    const pics = [standing(L, 'run1', false), standing(L, 'run2', false), standing(L, 'run1', true), standing(L, 'run2', true)], sp = .9 + V() * .3, off = V() * per;
+    vig(80.3, 103.3, pics, { win: jit([360, 480], 20), tick: e => {
+      let d = (T * sp + off) % per, k = 0;
+      while (d > 8.4) { d -= 8.4; k++; }
+      const [ax, ay] = loop[k], [bx, by] = loop[(k + 1) % 4];
+      e.x = ax + (bx - ax) * d / 8.4; e.y = ay + (by - ay) * d / 8.4;
+      e.cur = pics[(bx < ax || by > ay ? 0 : 2) + (Math.floor(T * 5 + off) % 2)];
+    } });
+  }
+  const base = V() * 5;                                          // elders exercising together, a beat apart
+  for (let i = 0; i < 6; i++) {
+    const L = look('old'), x = 91 + (i % 3) * .7, y = 95 + Math.floor(i / 3) * .8;
+    if (at(x | 0, y | 0) !== GRASS && at(x | 0, y | 0) !== PATH) continue;
+    vig(x, y, [standing(L, 'up', false), standing(L, 'side', false), standing(L, 'idle', false)], { win: jit([360, 480], 15), seq: [[0, 1.6], [1, 1.6], [2, 1.6]], ph: base + i * .18 });
+  }
+  benches.forEach(([x, y], i) => {                                 // benches: an umbrella couple, or someone alone
+    if (i % 3 === 0) { const A = look('man'), B = look('woman'); vig(x, y, [umbrellaPair(A, B, false), umbrellaPair(A, B, true)], { win: jit([990, 1140], 30), seq: [[0, 5 + V() * 5], [1, 3 + V() * 3]] }); }
+    else if (i % 3 === 1) { const L = look(); vig(x, y, [seated(L, 'read', false), seated(L, 'read2', false)], { win: jit([900, 1110], 40), seq: [[0, 6 + V() * 4], [1, .6]] }); }
+  });
+}
+
 // ── time of day (Yangon time; ?t=18:30 to preview another hour) ─────────────
 const Q = new URLSearchParams(location.search);
 const ygn = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Yangon', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' });
@@ -1204,7 +1266,11 @@ function update(dt) {
       else { e.s = e.l.ring ? (ns + e.l.len) % e.l.len : ns; e.x = x; e.y = y; }
       if (!e.alms && Math.random() < dt * .02) e.pause = 2 + Math.random() * 4;                                             // stop and look around
     } else if (e.k === 'pig') {
-      e.t -= dt; if (e.t < 0) { e.t = .4 + Math.random() * 1.5; e.x = e.hx + (Math.random() - .5) * 1.5; e.y = e.hy + (Math.random() - .5) * 1.5; }
+      e.t -= dt;
+      if (e.t < 0) {
+        const fed = e.feed && inWins(e.fwin), [hx, hy] = fed ? e.feed : [e.hx, e.hy], r = fed ? .9 : 1.5;
+        e.t = (fed ? .3 : .4) + Math.random() * (fed ? .8 : 1.5); e.x = hx + (Math.random() - .5) * r; e.y = hy + (Math.random() - .5) * r;
+      }
     } else if (e.k === 'vig') {
       if (e.tick) e.tick(e);
     } else if (e.k === 'boat') {
@@ -1359,7 +1425,7 @@ addEventListener('resize', resize);
     if (s.ecv) eg.drawImage(s.ecv, s.left, s.top);
     s.ecv = s.eg = s.g = null;
   }
-  populate(); riverside();
+  populate(); riverside(); suleLife(); parkLife();
   resize(); camX = sx(CX, CY) - vw / 2; camY = sy(CX, CY, 60) - vh / 2; clampCam();
   document.getElementById('load').remove();
   tick(); setInterval(tick, 1000);

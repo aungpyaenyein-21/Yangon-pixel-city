@@ -715,13 +715,13 @@ function teaShop(x, y, door) {          // tables go out on two sidewalk tiles; 
 }
 const benches = [];
 function bench(x, y) { benches.push([x + .4, y + .45]); const s = spr(x, y + .3, x + .8, y + .6, 10, 3), g = s.g; box(g, x, y + .3, x + .8, y + .6, 2, 4, '#7A5C3E'); g.fillStyle = '#4A3726'; g.fillRect(sx(x + .1, y + .6), sy(x + .1, y + .6) - 2, 1, 2); }
-function busStop(x, y, alongX, name = 'ဘတ်စ်ကား', roadWest = false) {
+function busStop(x, y, alongX, name = 'ဘတ်စ်ကား', roadWest = false, en = 'YBS') {
   const [a, b, c, d] = alongX ? [x, y + .3, x + 2, y + .8] : [x + .2, y, x + .7, y + 2], s = spr(a, b, c, d, 46, 4), g = s.g, e = glow(s);
   g.fillStyle = '#555';
   for (const [u, v] of [[a, d], [c, d], [a, b], [c, b]]) g.fillRect(sx(u, v), sy(u, v, 1) - 16, 1, 16);
   box(g, a, b, c, d, 16, 18, '#2F6FD0', '#4A86E0');
   box(g, a + .2, b + .1, c - .2, d - .1, 3, 5, '#9A9A9A');
-  const t = signTex(name, 'YBS', '#FFD600', '#0D47A1', 10), f = alongX ? { w: 0, k: d, a, b: c } : { w: 1, k: a, a: b, b: d };
+  const t = signTex(name, en, '#FFD600', '#0D47A1', 10), f = alongX ? { w: 0, k: d, a, b: c } : { w: 1, k: a, a: b, b: d };
   signOn(g, e, f, 18, t);
   // people waiting at the kerb, facing the road, and someone on the bench
   const kx = roadWest ? x + .15 : x + .85, kerb = alongX ? [[x + .6, y + .95], [x + 1.45, y + .95]] : [[kx, y + .55], [kx, y + 1.45]], back = !alongX && !roadWest;
@@ -736,7 +736,7 @@ function busStop(x, y, alongX, name = 'ဘတ်စ်ကား', roadWest = fal
 // the footbridge over Sule Pagoda Rd and Anawrahta Rd, just south of the cinemas (OSM: footway bridge + steps)
 const FB = 25;                                                   // deck height, px
 function footbridge() {
-  for (const [x, y] of [[64, 38], [64, 39], [64, 40], [64, 41], [64, 42], [69, 31], [69, 32], [69, 42], [69, 43], [69, 48], [69, 49], [69, 50], [69, 51], [69, 52], [69, 53]]) used.add(x + ',' + y);
+  for (const [x, y] of [[64, 38], [64, 39], [64, 40], [64, 41], [64, 42], [69, 56], [69, 57], [69, 42], [69, 43], [69, 48], [69, 49], [69, 50], [69, 51], [69, 52], [69, 53]]) used.add(x + ',' + y);
   const deck = (x0, y0, x1, y1, alongX) => {                     // a slab in the air: always drawn over what's under / behind it
     const s = spr(x0, y0, x1, y1, FB + 8, 2), g = s.g; s.above = true;
     box(g, x0, y0, x1, y1, FB, FB + 3, '#B8B2A6', '#A39D91');
@@ -938,8 +938,8 @@ function props() {
     if (at(x, y) === WALK && d > 10 && rnd() < 40 / (d + 20) && free1(x, y)) (chance(.3) ? teaShop : stall)(x, y);
   }
   for (let y = 49; y < 126; y++) if (at(130, y) === WALK && at(131, y) === LOT && free1(130, y)) bookSpot(130, y);   // Pansodan booksellers (east sidewalk: the west one is hidden from this camera)
-  for (const [x, y, ax] of [[28, 83, 1], [110, 83, 1], [40, 43, 1], [64, 58, 0], [64, 112, 0]]) if (free1(x, y)) busStop(x, y, ax);
-  busStop(69, 31, 0, 'ဆူးလေ ရုပ်ရှင်ရုံ', true);               // the YBS stop by the cinemas (OSM), between the two of them
+  for (const [x, y, ax] of [[28, 83, 1], [110, 83, 1], [40, 43, 1], [64, 112, 0]]) if (free1(x, y)) busStop(x, y, ax);
+  busStop(69, 56, 0, 'ဆူးလေ', true, 'YBS 3 12 36 61 87');       // the 'Sule' YBS stand, across the road from the fire station (OSM)
   for (let n = 0; n < 12; n++) { const x = 70.5 + rnd() * 27, y = 106.2; if (at(x | 0, 106) === GRASS) bench(q12(x), 106); }
   const quiet = [];                                       // chinlone: quiet streets without through traffic
   for (const [x0, x1, y0, y1] of NS) if (x1 - x0 === 2 && y1 < 148) for (let y = y0 + 3; y < y1 - 3; y++) quiet.push([x0 + 1, y + .5]);
@@ -982,18 +982,20 @@ function order(list) {
 }
 
 // ── moving things ────────────────────────────────────────────────────────────
-const ents = [], birds = [], crows = [], sparkles = [];
+const ents = [], birds = [], crows = [], sparkles = [], lanes = [];
 const R6 = 6.75, rad = Math.PI / 180;
 const arc = (a0, a1) => { const p = [], n = Math.ceil((a1 - a0) / 12); for (let i = 0; i <= n; i++) { const a = (a0 + (a1 - a0) * i / n) * rad; p.push([CX + R6 * Math.cos(a), CY - R6 * Math.sin(a)]); } return p; };
-function lane(pts, sp, minor) {
+function lane(pts, sp, minor) {   // sp: cruising speed, tiles/s
   const cum = [0]; for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]));
-  const L = { pts, cum, len: cum[cum.length - 1], sp };
+  const L = { pts, cum, len: cum[cum.length - 1], sp, cars: [], stops: [] };
+  lanes.push(L);
   const n = Math.max(1, Math.round(L.len / (minor ? 18 : 11)));
   for (let i = 0; i < n; i++) {
     const t = pick(minor ? ['car', 'taxi', 'trishaw', 'trishaw', 'car'] : ['car', 'car', 'car', 'taxi', 'taxi', 'bus', 'pickup']);
     const col = t === 'taxi' ? pick(['#F2F2EE', '#E9E9E4', '#F2F2EE', '#D23B3B']) : t === 'bus' ? pick(BUSC) : pick(CARC);
     const spr4 = {}; for (const d of 'EWSN') spr4[d] = vehicle(t, d, col);
-    ents.push({ k: 'veh', L, s: (i + rnd() * .5) / n * L.len, spr: spr4, r: rnd(), x: 0, y: 0, d: 'E' });
+    const c = { k: 'veh', L, s: (i + rnd() * .5) / n * L.len, spr: spr4, r: rnd(), x: 0, y: 0, d: 'E', v: sp, hl: VDIM[t][0] / 12 };
+    ents.push(c); L.cars.push(c);
   }
 }
 function lanePos(L, s) {
@@ -1407,9 +1409,11 @@ function setZoom(z, px = innerWidth / 2, py = innerHeight / 2) {
 
 function update(dt) {
   T += dt;
+  for (const L of lanes) drive(L, dt);
   for (const e of ents) {
     if (e.k === 'veh') {
-      e.s = (e.s + e.L.sp * dt) % e.L.len; const [x, y, dx, dy] = lanePos(e.L, e.s); e.x = x; e.y = y; e.d = dirOf(dx, dy);
+      if (e.r > density) e.s = (e.s + e.L.sp * dt) % e.L.len;       // off-duty cars just drift along unseen
+      const [x, y, dx, dy] = lanePos(e.L, e.s); e.x = x; e.y = y; e.d = dirOf(dx, dy);
     } else if (e.k === 'ped') {
       if (e.pause > 0) { e.pause -= dt; continue; }
       const ns = e.s + e.dir * e.sp * dt, [x, y] = linePt(e.l, ns);
@@ -1430,6 +1434,63 @@ function update(dt) {
   }
   for (const b of birds) b.a += b.w * dt;
   for (const c of crows) { c.x += c.vx * dt; c.y += c.vy * dt; if (c.x > MW + 5) { c.x = -5; c.y = rnd() * 150; } if (c.y < 0 || c.y > 160) c.vy = -c.vy; }
+}
+
+// ── traffic lights at the main crossings: cars slow down, stop at red and queue ──
+const signals = [];
+function light3(sig, axis) {                                      // 'g' | 'y' | 'r' for traffic along x ('h') or y ('v')
+  const t = (T + sig.ph) % 52;
+  if (axis === 'h') return t < 22 ? 'g' : t < 25 ? 'y' : 'r';
+  return t < 26 ? 'r' : t < 48 ? 'g' : t < 51 ? 'y' : 'r';
+}
+function drive(L, dt) {
+  const cars = L.cars.filter(c => c.r <= density).sort((a, b) => a.s - b.s);
+  cars.forEach((c, i) => {
+    let room = Infinity;
+    const ahead = cars[(i + 1) % cars.length];
+    if (ahead !== c) { let d = ahead.s - c.s; if (d <= 0) d += L.len; room = d - c.hl - ahead.hl - .35; }
+    for (const st of L.stops) {
+      let d = st.s - c.s; if (d < -.05) d += L.len;
+      if (d > 5) continue;
+      const col = light3(st.sig, st.axis);
+      if (col === 'r' || (col === 'y' && d - c.hl > .8)) room = Math.min(room, d - c.hl);
+    }
+    const want = Math.min(L.sp, Math.max(0, room) * 1.3);          // ease off as the gap closes
+    c.v = Math.max(0, Math.min(L.sp, c.v + Math.max(-5 * dt, Math.min(1.2 * dt, want - c.v))));
+    c.s = (c.s + Math.min(c.v * dt, Math.max(0, room))) % L.len;
+  });
+}
+function setupSignals() {
+  for (const [y0, y1, ex0, ex1, em] of EW) for (const [x0, x1, ny0, ny1, nm] of NS) {
+    if (!em || !nm || x0 < ex0 || x1 > ex1 || ny0 > y0 || ny1 < y1 || rbd(x0, y0) < 12) continue;
+    const sig = { x0, x1, y0, y1, ph: V() * 52 };
+    signals.push(sig);
+    vig(x0 - .3, y1 + .3, [], { z: 0, draw: (e, X, Y) => drawSignal(sig, X, Y, e) });   // pole on the corner nearest us
+  }
+  for (const L of lanes) {                                        // where each lane meets a signalled crossing
+    let inside = null;
+    for (let s = 0; s < L.len; s += .25) {
+      const [x, y, dx, dy] = lanePos(L, s), sig = signals.find(g => x > g.x0 && x < g.x1 && y > g.y0 && y < g.y1) || null;
+      if (sig && sig !== inside) L.stops.push({ s: Math.max(0, s - .5), sig, axis: Math.abs(dx) > Math.abs(dy) ? 'h' : 'v' });
+      inside = sig;
+    }
+  }
+}
+const LAMP = { r: ['#FF3B30', '#5A1A18'], y: ['#FFC400', '#5A4A12'], g: ['#35E06A', '#15502A'] };
+let glows = [];
+function drawSignal(sig, X, Y, e) {
+  const heads = [light3(sig, 'v'), light3(sig, 'h')];
+  drawEnt({ width: 11, height: 36, paint: (g, dx, dy) => {
+    g.fillStyle = '#4A4F55'; g.fillRect(dx + 5, dy + 9, 1, 27); g.fillRect(dx + 2, dy + 9, 7, 1);
+    heads.forEach((st, k) => {
+      const hx = dx + k * 6, hy = dy;
+      g.fillStyle = '#23262B'; g.fillRect(hx, hy, 5, 10);
+      ['r', 'y', 'g'].forEach((c, j) => {
+        g.fillStyle = LAMP[c][st === c ? 0 : 1]; g.fillRect(hx + 1, hy + 1 + j * 3, 3, 2);
+        if (st === c) glows.push([hx + 1, hy + 1 + j * 3, LAMP[c][0]]);
+      });
+    });
+  } }, X - 5, Y - 36, e.x, e.y);
 }
 
 function behind(ex, ey, s) {
@@ -1466,7 +1527,7 @@ function render() {
     vis.push(e);
   }
   vis.sort((a, b) => (a.y - a.x + (a.d || 0)) - (b.y - b.x + (b.d || 0)));
-  const lights = [];
+  const lights = []; glows = [];
   for (const e of vis) {
     const px = sx(e.x, e.y), py = sy(e.x, e.y);
     if (py < Y - 40 || py > Y + vh + 40) continue;
@@ -1501,6 +1562,7 @@ function render() {
   if (lt.L > .01) {
     fg.globalAlpha = Math.min(1, lt.L); fg.drawImage(EM, X, Y, vw, vh, 0, 0, vw, vh);
     for (const [c, dx, dy] of lights) fg.drawImage(c, dx - X, dy - Y);
+    for (const [gx, gy, col] of glows) { fg.fillStyle = col; fg.fillRect(gx - X, gy - Y, 3, 2); }
     fg.globalAlpha = 1;
   }
   const k = zoom * cv.width / innerWidth;
@@ -1562,7 +1624,7 @@ addEventListener('resize', resize);
   layout();
   sule(); cityHall(); mosque(); fireStation(); shangriLa(); sakura(); church(); court(); temple(); jetty(); monument();
   cinema(LM.shae, 'ရှေ့ဆောင်', 'SHAE SAUNG CINEMA', '#EADCC0');
-  cinema(LM.sulecin, 'ဆူးလေ ရုပ်ရှင်ရုံ', 'SULE CINEMA', '#D8E2E8');
+  cinema(LM.sulecin, 'နေပြည်တော်', 'NAY PYI TAW CINEMA', '#D8E2E8');
   colonial(...LM.ysx, 3, '#EFE7D2', { f: 'w', t: signTex('စတော့အိတ်ချိန်း', 'YSX', '#0D3C61', '#FFFFFF') });
   colonial(...LM.usemb, 4, '#E7D08E'); colonial(...LM.meie, 3, '#BFBAB0');
   colonial(...LM.divcourt, 3, '#A5452F', { f: 's', t: signTex('တိုင်းတရားရုံး', 'DIVISION COURT', '#EFE6D6', '#6B2A1F') });
@@ -1579,7 +1641,7 @@ addEventListener('resize', resize);
     if (s.ecv) eg.drawImage(s.ecv, s.left, s.top);
     s.ecv = s.eg = s.g = null;
   }
-  populate(); riverside(); suleLife(); parkLife(); upperLife(); bridgeWalkers();
+  populate(); setupSignals(); riverside(); suleLife(); parkLife(); upperLife(); bridgeWalkers();
   resize(); camX = sx(CX, CY) - vw / 2; camY = sy(CX, CY, 60) - vh / 2; clampCam();
   document.getElementById('load').remove();
   tick(); setInterval(tick, 1000);

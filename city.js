@@ -951,7 +951,7 @@ function props() {
     courts.push([x, y]); for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) used.add(((x + dx) | 0) + ',' + ((y + dy) | 0));
     chinlone(x, y);
   }
-  wiring(); streetSigns();
+  wiring();
   parked(54.3, 58, 'N', 'fire');
   for (const [x0, x1, y0, y1] of NS) if (x1 - x0 === 2) for (let y = y0 + 2; y < y1 - 1; y += 1.5) {
     if (at(x0 - 1, y | 0) === WALK && at(x0 - 1, (y + 1) | 0) === WALK && chance(.35) && free1(x0, y)) parked(x0 + .4, y + .5, chance(.5) ? 'N' : 'S');
@@ -1368,20 +1368,6 @@ function wiring() {
       if (last !== null && y - last < 14) wires(x1 + .4, last + .5, x1 + .4, y + .5, V.i(2, 4));
       last = y;
     }
-  }
-}
-
-// street-name signs: green plates, Burmese over English, on a pole at the corner nearest the camera
-function streetSigns() {
-  const plate = (my, en) => signTex(my, en, '#1E6B45', '#FFFFFF', 10);
-  for (const [y0, y1, ex0, ex1, , emy, een] of EW) for (const [x0, x1, ny0, ny1, , nmy, nen] of NS) {
-    const cx = x0 - 1, cy = y1;                                     // the south-west corner sidewalk
-    if (x0 < ex0 || x1 > ex1 || ny0 > y0 || ny1 < y1 || at(cx, cy) !== WALK || rbd(cx, cy) < 11 || !free1(cx, cy)) continue;
-    const a = plate(emy, een), b = plate(nmy, nen), px = cx + .75, py = cy + .25;
-    const s = spr(px - .05, py - .05, px + .05, py + .05, 50, Math.max(a.width, b.width) + 4), g = s.g, X = sx(px, py), Y = sy(px, py, 1);
-    g.fillStyle = '#5A5F66'; g.fillRect(X, Y - 36, 1, 36);
-    fimg(g, { w: 0, k: py }, px, 36 - a.height, a);                // along the east–west road
-    fimg(g, { w: 1, k: px }, py, 36 - b.height, b);                // along the north–south road
   }
 }
 

@@ -174,29 +174,29 @@ const BILLS = [
 ];
 
 // ── map (tiles, from OpenStreetMap) ──────────────────────────────────────────
-const EW = [ // [y0, y1, x0, x1, main]
-  [6, 10, 0, MW, 1],        // Bogyoke Aung San Rd
-  [44, 48, 0, MW, 1],       // Anawrahta Rd
-  [66, 68, 69, 99, 0],      // Municipal St
-  [84, 88, 0, MW, 1],       // Maha Bandula Rd
-  [126, 130, 0, MW, 1],     // Merchant Rd
-  [138, 140, 69, 126, 0],   // Bank St
-  [148, 152, 0, MW, 1],     // Strand Rd
+const EW = [ // [y0, y1, x0, x1, main, Burmese name, English name]
+  [6, 10, 0, MW, 1, 'ဗိုလ်ချုပ်အောင်ဆန်းလမ်း', 'BOGYOKE AUNG SAN RD'],
+  [44, 48, 0, MW, 1, 'အနော်ရထာလမ်း', 'ANAWRAHTA RD'],
+  [66, 68, 69, 99, 0, 'စည်ပင်လမ်း', 'MUNICIPAL ST'],
+  [84, 88, 0, MW, 1, 'မဟာဗန္ဓုလလမ်း', 'MAHA BANDULA RD'],
+  [126, 130, 0, MW, 1, 'ကုန်သည်လမ်း', 'MERCHANT RD'],
+  [138, 140, 69, 126, 0, 'ဘဏ်လမ်း', 'BANK ST'],
+  [148, 152, 0, MW, 1, 'ကမ်းနားလမ်း', 'STRAND RD'],
 ];
-const NS = [ // [x0, x1, y0, y1, main]
-  [4, 8, 0, 152, 1],        // Shwe Bon Thar Rd
-  [16, 18, 0, 148, 0],      // 29th St
-  [25, 27, 0, 148, 0],      // 30th St
-  [35, 37, 0, 148, 0],      // Bo Soon Pat St
-  [44, 46, 0, 148, 0],      // 31st St
-  [53, 55, 0, 148, 0],      // 32nd St
-  [65, 69, 0, 152, 1],      // Sule Pagoda Rd
-  [82, 84, 0, 66, 0],       // 33rd St
-  [90, 92, 0, 66, 0],       // 34th St
-  [99, 101, 0, 148, 0],     // Maha Bandula Park / Garden St
-  [108, 110, 0, 84, 0],     // 35th St
-  [117, 119, 0, 148, 0],    // 36th St
-  [126, 130, 0, 152, 1],    // Pansodan St
+const NS = [ // [x0, x1, y0, y1, main, Burmese name, English name]
+  [4, 8, 0, 152, 1, 'ရွှေဘုံသာလမ်း', 'SHWE BON THAR RD'],
+  [16, 18, 0, 148, 0, '၂၉ လမ်း', '29TH ST'],
+  [25, 27, 0, 148, 0, '၃၀ လမ်း', '30TH ST'],
+  [35, 37, 0, 148, 0, 'ဗိုလ်ဆွန်ပတ်လမ်း', 'BO SOON PAT ST'],
+  [44, 46, 0, 148, 0, '၃၁ လမ်း', '31ST ST'],
+  [53, 55, 0, 148, 0, '၃၂ လမ်း', '32ND ST'],
+  [65, 69, 0, 152, 1, 'ဆူးလေဘုရားလမ်း', 'SULE PAGODA RD'],
+  [82, 84, 0, 66, 0, '၃၃ လမ်း', '33RD ST'],
+  [90, 92, 0, 66, 0, '၃၄ လမ်း', '34TH ST'],
+  [99, 101, 0, 148, 0, 'မဟာဗန္ဓုလပန်းခြံလမ်း', 'MAHA BANDULA PARK ST'],
+  [108, 110, 0, 84, 0, '၃၅ လမ်း', '35TH ST'],
+  [117, 119, 0, 148, 0, '၃၆ လမ်း', '36TH ST'],
+  [126, 130, 0, 152, 1, 'ပန်းဆိုးတန်းလမ်း', 'PANSODAN ST'],
 ];
 const [CX, CY] = [67, 86];  // Sule roundabout
 const LM = {
@@ -868,7 +868,7 @@ function props() {
     courts.push([x, y]); for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) used.add(((x + dx) | 0) + ',' + ((y + dy) | 0));
     chinlone(x, y);
   }
-  wiring();
+  wiring(); streetSigns();
   parked(54.3, 58, 'N', 'fire');
   for (const [x0, x1, y0, y1] of NS) if (x1 - x0 === 2) for (let y = y0 + 2; y < y1 - 1; y += 1.5) {
     if (at(x0 - 1, y | 0) === WALK && at(x0 - 1, (y + 1) | 0) === WALK && chance(.35) && free1(x0, y)) parked(x0 + .4, y + .5, chance(.5) ? 'N' : 'S');
@@ -1285,6 +1285,20 @@ function wiring() {
       if (last !== null && y - last < 14) wires(x1 + .4, last + .5, x1 + .4, y + .5, V.i(2, 4));
       last = y;
     }
+  }
+}
+
+// street-name signs: green plates, Burmese over English, on a pole at the corner nearest the camera
+function streetSigns() {
+  const plate = (my, en) => signTex(my, en, '#1E6B45', '#FFFFFF', 10);
+  for (const [y0, y1, ex0, ex1, , emy, een] of EW) for (const [x0, x1, ny0, ny1, , nmy, nen] of NS) {
+    const cx = x0 - 1, cy = y1;                                     // the south-west corner sidewalk
+    if (x0 < ex0 || x1 > ex1 || ny0 > y0 || ny1 < y1 || at(cx, cy) !== WALK || rbd(cx, cy) < 11 || !free1(cx, cy)) continue;
+    const a = plate(emy, een), b = plate(nmy, nen), px = cx + .75, py = cy + .25;
+    const s = spr(px - .05, py - .05, px + .05, py + .05, 50, Math.max(a.width, b.width) + 4), g = s.g, X = sx(px, py), Y = sy(px, py, 1);
+    g.fillStyle = '#5A5F66'; g.fillRect(X, Y - 36, 1, 36);
+    fimg(g, { w: 0, k: py }, px, 36 - a.height, a);                // along the east–west road
+    fimg(g, { w: 1, k: px }, py, 36 - b.height, b);                // along the north–south road
   }
 }
 

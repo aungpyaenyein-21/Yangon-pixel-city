@@ -491,10 +491,11 @@ function stupa() {
   }
   // profile, px above the terraces → radius in tiles. The Shwedagon silhouette is the contrast between
   // the full, round-shouldered bell and the long slender banana bud above it.
-  const Z0 = BZ + 26, H = 250, SEAMS = [22, 100, 116, 134, 206];
+  const Z0 = BZ + 26, H = 250, SEAMS = [22, 70, 100, 116, 134, 206];
   const prof = z =>
     z < 10 ? 4.8 : z < 14 ? 4.4 : z < 18 ? 4.1 : z < 22 ? 3.8                           // octagonal dais, three rings
-    : z < 100 ? 2 + 1.65 * Math.sqrt(Math.max(0, 1 - ((z - 22) / 78) ** 2.4))          // the bell: stays wide, then rounds over
+    : z < 70 ? 2.45 + 1.25 * Math.pow(1 - (z - 22) / 48, 1.8)                          // the flared skirt of the bell, plated in gold
+    : z < 100 ? 2 + .45 * Math.sqrt(Math.max(0, 1 - ((z - 70) / 30) ** 2))             // the bell itself, round-shouldered
     : z < 112 ? 2.1 + .18 * Math.sin((z - 100) / 12 * Math.PI)                          // inverted alms bowl
     : z < 116 ? 1.95                                                                     // ornamental band
     : z < 125 ? 2.05 - (z - 116) * .05 : z < 134 ? 1.55 + (z - 125) * .03              // double lotus: down-turned, then up-turned
@@ -528,6 +529,12 @@ function stupa() {
       }
     }
   };
+  for (let a = .1; a < Math.PI - .05; a += .17) {                  // vertical seams of the gold plates on the skirt
+    for (let z = 23; z < 69; z++) {
+      const r = prof(z), px = Math.round(X + r * HW * Math.SQRT2 * Math.cos(a)), py = Math.round(Y(z) + r * HH * Math.SQRT2 * Math.sin(a));
+      g.fillStyle = '#B07A18'; g.fillRect(px, py, 1, 1); e.fillStyle = '#E8A830'; e.fillRect(px, py, 1, 1);
+    }
+  }
   petals(116, false, 2.02, '#F6D77E', '#A87420');
   petals(126, true, 1.6, '#FFF0B0', '#B8821A');
   for (let a = .2; a < Math.PI - .1; a += .3) {                    // a garland of beads round the bowl

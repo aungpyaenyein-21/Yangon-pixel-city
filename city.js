@@ -900,7 +900,7 @@ const dirOf = (dx, dy) => (Math.abs(dx) > Math.abs(dy) ? (dx > 0 ? 'E' : 'W') : 
 const WALKABLE = new Set([WALK, PROM, PATH, PLAZA, ROAD, ISLE]);
 const linePt = (l, s) => (l.ring ? [CX + 9.1 * Math.cos(s / 9.1), CY + 9.1 * Math.sin(s / 9.1)] : [l.ax + (l.bx - l.ax) * s / l.len, l.ay + (l.by - l.ay) * s / l.len]);
 const okPt = (l, x, y) => WALKABLE.has(at(x | 0, y | 0)) && (l.ring || Math.hypot(x - CX, y - CY) > 9.3);
-function walkers(ax, ay, bx, by, per = 11) {
+function walkers(ax, ay, bx, by, per = 14) {
   const l = { ax, ay, bx, by, len: Math.hypot(bx - ax, by - ay) };
   for (let n = Math.round(l.len / per); n > 0; n--) addWalker(l, pickKind());
   return l;
@@ -909,7 +909,7 @@ function addWalker(l, kind, s, bowl) {
   for (let i = 0; i < 12 && s === undefined; i++) { const t = rnd() * l.len, [x, y] = linePt(l, t); if (okPt(l, x, y)) s = t; }
   if (s === undefined) return;
   const [x, y] = linePt(l, s);
-  ents.push({ k: 'ped', l, s, dir: chance(.5) ? 1 : -1, sp: .35 + rnd() * .35, pause: 0, spr: person(kind, bowl), r: rnd(), ph: rnd() * 2, x, y });
+  ents.push({ k: 'ped', l, s, dir: chance(.5) ? 1 : -1, sp: .28 + rnd() * .25, pause: 0, spr: person(kind, bowl), r: rnd(), ph: rnd() * 2, x, y });
 }
 function populate() {
   for (const [y0, y1, x0, x1, m] of EW) {
@@ -1085,10 +1085,9 @@ function update(dt) {
     } else if (e.k === 'ped') {
       if (e.pause > 0) { e.pause -= dt; continue; }
       const ns = e.s + e.dir * e.sp * dt, [x, y] = linePt(e.l, ns);
-      if ((!e.l.ring && (ns < 0 || ns > e.l.len)) || !okPt(e.l, x, y)) e.dir = -e.dir;
+      if ((!e.l.ring && (ns < 0 || ns > e.l.len)) || !okPt(e.l, x, y)) { e.dir = -e.dir; if (!e.alms) e.pause = 3 + Math.random() * 6; }   // wait a while before heading back
       else { e.s = e.l.ring ? (ns + e.l.len) % e.l.len : ns; e.x = x; e.y = y; }
-      if (!e.alms && Math.random() < dt * .04) e.pause = 1 + Math.random() * 3;
-      if (!e.alms && Math.random() < dt * .015) e.dir = -e.dir;
+      if (!e.alms && Math.random() < dt * .02) e.pause = 2 + Math.random() * 4;                                             // stop and look around
     } else if (e.k === 'pig') {
       e.t -= dt; if (e.t < 0) { e.t = .4 + Math.random() * 1.5; e.x = e.hx + (Math.random() - .5) * 1.5; e.y = e.hy + (Math.random() - .5) * 1.5; }
     } else if (e.k === 'vig') {

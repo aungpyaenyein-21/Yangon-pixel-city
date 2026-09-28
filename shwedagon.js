@@ -579,9 +579,14 @@ const WALLC = ['#F3EDE1', '#F6F1E6', '#EFE7D6'];
 function hall(x0, y0, x1, y1) {
   const long = Math.max(x1 - x0, y1 - y0) > 12, h = long ? 9 : 8 + V.i(0, 1) * 2;
   const s = spr(x0, y0, x1, y1, PZ + h + 110, 4), g = s.g, e = glow(s), wall = V.pick(WALLC), roof = roofCol();
-  if (long) {                                                     // a covered walkway: pillars and a long roof
-    for (const f of faces(x0, y0, x1, y1)) for (let u = f.a; u < f.b; u += 1) fr(g, f, u, u + .17, PZ, PZ + h, sh('#C9473A', f.s));
-    for (let v = y0; v < y1; v += 2) box(g, x0, v, x1, Math.min(y1, v + 1.5), PZ + h, PZ + h + 2, '#8E6A4A', '#A5825E');   // slatted, so it doesn't swamp the view
+  if (long) {                                                     // a covered walkway: rows of gilded pillars under a thin deep-red roof
+    for (const f of faces(x0, y0, x1, y1)) for (let u = f.a + .2; u < f.b; u += 1) {
+      fr(g, f, u, u + .17, PZ, PZ + h, sh('#D9A93A', f.s)); fr(g, f, u, u + .17, PZ + h - 2, PZ + h, sh('#F0CF72', f.s));
+    }
+    box(g, x0, y0, x1, y1, PZ + h, PZ + h + 2, ROOF_RED, sh(ROOF_RED, 1.15));
+    for (const f of faces(x0, y0, x1, y1)) fr(g, f, f.a, f.b, PZ + h + 1, PZ + h + 2, TRIM);   // gold edge
+    const alongY = y1 - y0 > x1 - x0, c = alongY ? (x0 + x1) / 2 : (y0 + y1) / 2;   // a gold ridge line down the middle
+    if (alongY) tF(g, c - 1 / 12, y0, c + 1 / 12, y1, PZ + h + 2, TRIM); else tF(g, x0, c - 1 / 12, x1, c + 1 / 12, PZ + h + 2, TRIM);
     return s;
   }
   box(g, x0, y0, x1, y1, PZ, PZ + h, wall, '#CFC6B4');

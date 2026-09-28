@@ -1129,6 +1129,35 @@ function bookSpot(x, y) {
   }
 }
 
+// the Strand at sunset: people behind the railing watching the river, couples, a few rods out
+function fisher(L) {
+  const body = standing(L, 'rod', false);
+  return [10, 11].map(tipY => {                                     // the rod tip bobs a little
+    const c = mk(22, 38), g = c.getContext('2d'); g.drawImage(body, 0, 10);
+    g.fillStyle = '#7A5A36'; for (let i = 0; i <= 14; i++) g.fillRect(5 + i, Math.round(17 + (tipY - 17) * i / 14), 1, 1);
+    g.fillStyle = 'rgba(235,235,230,.7)'; g.fillRect(19, tipY + 1, 1, 37 - tipY);
+    return anchor(c, 3, 24);
+  });
+}
+function riverside() {
+  const slots = [];
+  for (let n = 0; n < 400 && slots.length < 18; n++) {
+    const x = 1 + V() * 115;
+    const off = c => Math.abs((((x - c) % 5) + 7.5) % 5 - 2.5);    // distance to the nearest tree / lamp
+    if (off(2.5) > .9 && off(4.5) > .4 && !slots.some(a => Math.abs(a - x) < 1.4)) slots.push(x);
+  }
+  slots.forEach((x, i) => {
+    const win = jit([1020, 1140], 25), y = 154.6;
+    if (i % 6 === 0) { const L = look('man'); vig(x, y, fisher(L), { win: jit([990, 1150], 20), seq: [[0, 2 + V() * 3], [1, 1 + V()]] }); }
+    else if (i % 6 === 1) {                                          // a couple; one leans in now and then
+      const A = look('man'), B = look('woman');
+      vig(x - .3, y, [seated(A, 'sit', false)], { win });
+      vig(x, y, [seated(B, 'sit', false), seated(B, 'lean', false)], { win, seq: [[0, 4 + V() * 5], [1, 3 + V() * 3]] });
+    } else if (i % 6 === 2) { const L = look(); vig(x, y, [standing(L, 'idle', false), standing(L, 'idle2', false)], { win, seq: [[0, 5 + V() * 5], [1, 2]] }); }
+    else { const L = look(); vig(x, y, [seated(L, 'sit', false), seated(L, V.p(.5) ? 'fan' : 'talk', false)], { win, seq: [[0, 6 + V() * 6], [1, 1.5]] }); }
+  });
+}
+
 // ── time of day (Yangon time; ?t=18:30 to preview another hour) ─────────────
 const Q = new URLSearchParams(location.search);
 const ygn = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Yangon', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' });
@@ -1237,7 +1266,9 @@ function render() {
       fg.fillStyle = '#6E737B'; fg.fillRect(px - 1, py - 2, 2, 1); fg.fillStyle = '#9AA0A8'; fg.fillRect(px + 1, py - 3, 1, 1);
     }
   }
-  for (const [x, y, p] of sparkles) if (Math.sin(T * 1.3 + p) > .75) { fg.fillStyle = 'rgba(235,245,240,.6)'; fg.fillRect(sx(x, y) + ((T * 3 + p * 5) % 6 | 0), sy(x, y, -5), 3, 1); }
+  const dusk = mins > 1000 && mins < 1135;                     // the river catches the sunset
+  fg.fillStyle = dusk ? 'rgba(255,190,120,.8)' : 'rgba(235,245,240,.6)';
+  for (const [x, y, p] of sparkles) if (Math.sin(T * 1.3 + p) > (dusk ? .5 : .75)) fg.fillRect(sx(x, y) + ((T * 3 + p * 5) % 6 | 0), sy(x, y, -5), 3, 1);
   fg.fillStyle = '#4A4F57';
   for (const b of birds) {
     const x = CX + b.r * Math.cos(b.a), y = CY - b.r * Math.sin(b.a), X2 = sx(x, y), Y2 = sy(x, y, b.z), f = (T * 8 + b.r) % 2 < 1;
@@ -1328,7 +1359,7 @@ addEventListener('resize', resize);
     if (s.ecv) eg.drawImage(s.ecv, s.left, s.top);
     s.ecv = s.eg = s.g = null;
   }
-  populate();
+  populate(); riverside();
   resize(); camX = sx(CX, CY) - vw / 2; camY = sy(CX, CY, 60) - vh / 2; clampCam();
   document.getElementById('load').remove();
   tick(); setInterval(tick, 1000);

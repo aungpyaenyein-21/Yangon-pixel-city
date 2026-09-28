@@ -4,7 +4,7 @@
 
 // ── projection: 2:1 isometric, camera looks from the south-west ─────────────
 const HW = 12, HH = 6, FL = 10;              // half tile (1 tile ≈ 5 m), px per storey
-const MW = 100, MH = 120;                     // map in tiles: x → east, y → south (1 tile ≈ 5 m)
+const MW = 110, MH = 120;                     // map in tiles: x → east, y → south (1 tile ≈ 5 m)
 const OY = MW * HH + 170;                     // headroom for the stupa
 const CW = (MW + MH) * HW, CH = OY + MH * HH + 40;
 const sx = (x, y) => Math.round((x + y) * HW);
@@ -441,7 +441,7 @@ const TREES = [[26.25,62.25],[35.75,59.25],[38.0,58.75],[50.75,11.75],[63.75,51.
 
 // ── the scene ─────────────────────────────────────────────────────────────────
 // the OSM layout above was laid out with the stupa at (40, 38); everything moves by one offset to leave room for the hill
-const OFF = [14, 16], o = (x, y) => [x + OFF[0], y + OFF[1]];
+const OFF = [24, 16], o = (x, y) => [x + OFF[0], y + OFF[1]];
 for (const a of [SMALL, TREES]) for (const p of a) { p[0] += OFF[0]; p[1] += OFF[1]; }
 for (const h of HALLS) { h[0] += OFF[0]; h[2] += OFF[0]; h[1] += OFF[1]; h[3] += OFF[1]; }
 const [CX, CY] = o(40, 38);                      // the main stupa
@@ -449,6 +449,8 @@ const PZ = 115, BZ = PZ + 7;                     // Singuttara Hill: the platfor
 const PLAT = [...o(11, 1), ...o(67, 64)], BASE = [...o(28.5, 26.5), ...o(51.5, 49.5)], INNER = [...o(32, 30), ...o(48, 46)];
 const STAIR = [...o(47.5, 64), ...o(50.5, 91)];  // the southern covered stairway
 const ROAD = [96 + OFF[1], 100 + OFF[1]];
+const WSTAIR = [6, 45.5 + OFF[1], PLAT[0], 48.5 + OFF[1]];   // the western stairway (OSM), the longest, down to U Wisara Road
+const WROAD = [1, 5];                            // U Wisara Road, along the west edge
 const inR = (r, x, y) => x >= r[0] && x < r[2] && y >= r[1] && y < r[3];
 // planetary posts (OSM): day, x, y, animal
 const POSTS = [['sun', 47.2, 24.8, 'garuda'], ['mon', 53, 34.4, 'tiger'], ['tue', 54, 45, 'lion'], ['wed', 43.8, 53.5, 'elephant'],
@@ -465,12 +467,14 @@ const hz = (x, y) => (x < 0 || y < 0 || x >= MW || y >= MH ? 0 : HZ[y * MW + x])
 // terraces by distance (tiles) outside the platform: white retaining wall, wooded slope, the lower ring path, slope, foot, street
 const LEVELS = [[0, PZ], [3, PZ - 30], [6, Math.round(PZ * .65)], [8, Math.round(PZ * .45)], [11, Math.round(PZ * .28)], [14, Math.round(PZ * .12)]];
 function layout() {
-  const ks = 15 / (STAIR[3] - PLAT[3]);                          // the south slope is stretched out to the foot of the stairway
+  const ks = 15 / (STAIR[3] - PLAT[3]), kw = 15 / (PLAT[0] - WSTAIR[0]);   // south and west slopes run out to their stairways' feet
   for (let y = 0; y < MH; y++) for (let x = 0; x < MW; x++) {
     const i = y * MW + x, cx = x + .5, cy = y + .5;
     if (y >= ROAD[0] && y < ROAD[1]) { G[i] = ROADT; continue; }
     if (y === ROAD[0] - 1 || y === ROAD[1]) { G[i] = WALK; HZ[i] = 1; continue; }
-    const d = Math.ceil(Math.max(PLAT[0] - cx, cx - PLAT[2], PLAT[1] - cy, (cy - PLAT[3]) * ks));
+    if (x >= WROAD[0] && x < WROAD[1]) { G[i] = ROADT; continue; }
+    if (x === WROAD[1] || x === WROAD[0] - 1) { G[i] = WALK; HZ[i] = 1; continue; }
+    const d = Math.ceil(Math.max((PLAT[0] - cx) * kw, cx - PLAT[2], PLAT[1] - cy, (cy - PLAT[3]) * ks));
     const lv = LEVELS.find(([dm]) => d <= dm);
     HZ[i] = lv ? lv[1] : 1;
     G[i] = d <= 0 ? PLATT : lv && lv === LEVELS[3] ? LOWRING : GRASS;
@@ -659,25 +663,83 @@ function lampAt(x, y, z) {
   e.fillStyle = 'rgba(255,205,120,.2)';
   for (let dy = -5; dy <= 5; dy++) { const w = Math.round(11 * Math.sqrt(1 - (dy / 6) ** 2)); e.fillRect(X - w, Y + dy, 2 * w, 1); }
 }
-// the southern stairway: a long covered flight down the hill, roofs stepping down, stalls inside
+// the stairways climb the hill terrace by terrace: a flight across each drop, a flat landing on each terrace
+// (so the flights come out uneven, and one landing is the lower ring path crossing at z 52)
+function profile(len, tz) {                                      // tz(d): terrain height d tiles down from the platform edge
+  const drops = []; let z = PZ;
+  for (let d = 0; d <= len; d += .5) { const t = d >= len ? 0 : tz(d); if (t !== z) { drops.push([d, z, t]); z = t; } }
+  const fl = []; let end = 0;
+  drops.forEach(([d, a, b], i) => {
+    const f = (a - b) / 8, hi = i + 1 < drops.length ? drops[i + 1][0] : len, s = Math.max(end, Math.min(d - f / 2, hi - f));
+    end = Math.min(s + f, hi); fl.push([s, end, a, b]);
+  });
+  const at = d => { for (const [s, e, a, b] of fl) { if (d < s) return a; if (d <= e) return a + (b - a) * (d - s) / (e - s); } return 0; };
+  at.flights = fl; return at;
+}
 function stairway() {
-  const [x0, y0, x1, y1] = STAIR, n = 9, L = (y1 - y0) / n, s = spr(x0, y0, x1, y1, PZ + 60, 6), g = s.g, e = glow(s);
-  for (let i = 0; i < n; i++) {
-    const a = y0 + i * L, b = a + L, fz = Math.round(PZ * (1 - (i + 1) / n)), rz = fz + 18;
-    box(g, x0, a, x1, b, 0, fz + 1, '#DCD3C1', '#D2C8B4');         // the flight itself, stepping down
+  const [x0, y0, x1, y1] = STAIR, s = spr(x0, y0, x1, y1, PZ + 60, 6), g = s.g, e = glow(s);
+  const zAt = profile(y1 - y0, d => hz(Math.floor(x0) - 1, Math.floor(y0 + d)));
+  for (let a = y0; a < y1 - .01; a += .5) {                       // half-tile slices, back (up the hill) to front
+    const b = Math.min(y1, a + .5), fz = Math.round(zAt(b - y0)), rz = fz + 18, lo = Math.min(fz, hz(Math.floor(x0) - 1, Math.floor(a)));
+    box(g, x0, a, x1, b, lo, fz + 1, '#DCD3C1', '#D2C8B4');
     const f = { w: 1, k: x0 };
-    for (let u = a; u < b - .1; u += .5) {
-      fr(g, f, u, u + .1, fz, rz, '#A8342A');                       // red pillars
-      fr(g, f, u + .1, u + .5, fz + 1, fz + 8, V.pick(GOODS));      // stalls: flowers, candles, umbrellas, books
-      fr(e, f, u + .1, u + .5, fz + 8, rz - 2, '#FFD690');
-    }
+    fr(g, f, a, a + .1, fz, rz, '#A8342A');                          // red pillars
+    fr(g, f, a + .1, b, fz + 1, fz + 8, V.pick(GOODS));              // stalls: flowers, candles, umbrellas, books
+    fr(e, f, a + .1, b, fz + 8, rz - 2, '#FFD690');                  // lit at night, a line of light climbing the hill
     box(g, x0 - .15, a, x1 + .15, b, rz, rz + 3, '#B8862A', '#D9A93A');
-    box(g, x0 + .4, a + .2, x1 - .4, b - .2, rz + 3, rz + 6, ROOF_GREEN, sh(ROOF_GREEN, 1.18));
+    box(g, x0 + .4, a, x1 - .4, b, rz + 3, rz + 6, ROOF_GREEN, sh(ROOF_GREEN, 1.18));
   }
   const gate = spr(x0 - .8, y1 - .6, x1 + .8, y1 + .4, 130, 4), gg = gate.g;   // the gateway at the foot
   box(gg, x0 - .8, y1 - .6, x0 - .2, y1 + .4, 0, 26, '#F2ECDF'); box(gg, x1 + .2, y1 - .6, x1 + .8, y1 + .4, 0, 26, '#F2ECDF');
   box(gg, x0 - .8, y1 - .6, x1 + .8, y1 + .4, 26, 30, '#D9A93A');
   pyatthat(gg, (x0 + x1) / 2, y1 - .1, 30, 1.6, 5, ROOF_GOLD, 56);
+}
+// the western stairway: the longest, quiet — plain white pillars, no stalls, an escalator on the long middle flight
+const ESC = [];                                                   // [x from, x to] of the escalator, for the moving treads
+function westStairway() {
+  const [x0, y0, x1, y1] = WSTAIR, s = spr(x0, y0, x1, y1, PZ + 60, 6), g = s.g, e = glow(s);
+  const zAt = profile(x1 - x0, d => hz(Math.floor(x1 - d - .01), Math.ceil(y1)));
+  const [fs, fe] = zAt.flights.slice(1, -1).reduce((m, f) => (f[1] - f[0] > m[1] - m[0] ? f : m));   // the escalator: the longest flight partway up
+  ESC.push(x1 - fe, x1 - fs); ESC.z = zAt;
+  for (let b = x1; b > x0 + .01; b -= .5) {                        // slices from the platform end westwards (back to front)
+    const a = Math.max(x0, b - .5), fz = Math.round(zAt(x1 - a)), rz = fz + 16, lo = Math.min(fz, hz(Math.floor(a), Math.ceil(y1)));
+    box(g, a, y0, b, y1, lo, fz + 1, '#DCD3C1', '#D2C8B4');
+    const f = { w: 0, k: y1 };
+    fr(g, f, a, a + .1, fz, rz, '#F2ECDF');                          // white pillars
+    fr(g, f, a + .1, b, fz + 1, fz + 4, '#CFC6B4');                  // a plain balustrade, nothing for sale
+    fr(e, f, a + .1, b, fz + 4, rz - 2, '#FFE2A8');
+    box(g, a, y0 - .15, b, y1 + .15, rz, rz + 3, '#B8862A', '#D9A93A');
+    box(g, a, y0 + .4, b, y1 - .4, rz + 3, rz + 6, ROOF_GREEN, sh(ROOF_GREEN, 1.18));
+  }
+  const gate = spr(x0 - .4, y0 - .8, x0 + .6, y1 + .8, 130, 4), gg = gate.g;
+  box(gg, x0 - .4, y0 - .8, x0 + .6, y0 - .2, 0, 26, '#F2ECDF'); box(gg, x0 - .4, y1 + .2, x0 + .6, y1 + .8, 0, 26, '#F2ECDF');
+  box(gg, x0 - .4, y0 - .8, x0 + .6, y1 + .8, 26, 30, '#D9A93A');
+  pyatthat(gg, x0 + .1, (y0 + y1) / 2, 30, 1.6, 5, ROOF_GOLD, 56);
+}
+function escalator() {                                            // silver rails and treads creeping up, seen through the south side
+  const [xa, xb] = ESC, y = WSTAIR[3] + .02, zAt = x => ESC.z(WSTAIR[2] - x);
+  vig((xa + xb) / 2, y, [], { z: 0, draw: e => {
+    const c0 = sx(xa, y), c1 = sx(xb, y);
+    const top = sy(xb, y, zAt(xb)) - 8;
+    drawEnt({ width: c1 - c0 + 1, height: sy(xa, y, zAt(xa)) - top + 2, paint: g => {
+      for (let c = c0; c <= c1; c++) {
+        const x = c / 12 - y, base = bs(c, y) - Math.round(zAt(x));
+        g.fillStyle = '#7C828A'; g.fillRect(c, base - 7, 1, 1); g.fillRect(c, base - 4, 1, 1);          // the two handrails
+        g.fillStyle = ((Math.floor(c / 3 - T * 2) & 1)) ? '#6F757D' : '#D6D9DE'; g.fillRect(c, base - 3, 1, 2);   // treads moving up
+      }
+    } }, c0, top, e.x, e.y);
+  } });
+}
+function chintheW(x, y, flip) {                                     // the west gate's pair, looking out over U Wisara Road
+  const s = spr(x - 1, y - 1, x + 1, y + 1, 80, 4), g = s.g;
+  box(g, x - .9, y - .9, x + .9, y + .9, 0, 10, '#E9E4D8', '#F4F1EA');
+  box(g, x - .5, y - .6, x + .7, y + .6, 10, 30, '#F7F4EC', '#FFFFFF');
+  const hy = flip ? y + .1 : y - .1;
+  box(g, x - .95, hy - .55, x - .1, hy + .55, 30, 46, '#FAF8F2', '#FFFFFF');
+  const f = { w: 1, k: x - .95 };
+  fr(g, f, hy - .45, hy + .45, 32, 35, '#C0392B'); fr(g, f, hy - .35, hy - .15, 39, 41, '#D9A93A'); fr(g, f, hy + .15, hy + .35, 39, 41, '#D9A93A');
+  for (let z = 30; z < 46; z += 3) fr(g, { w: 0, k: hy + .55 }, x - .95, x - .1, z, z + 1, '#D9A93A');
+  box(g, x - .95, hy - .55, x - .1, hy + .55, 46, 49, '#D9A93A');
 }
 function chinthe(x, y, flip) {                                     // the two great white leogryphs guarding the south gate
   const s = spr(x - 1, y - 1, x + 1, y + 1, 80, 4), g = s.g;
@@ -702,12 +764,12 @@ function stall(x, y, kind) {                                       // flower and
 }
 
 function build() {
-  const backdrop = [], near = (x, y) => x > STAIR[0] - 1.6 && x < STAIR[2] + 1.6 && y > STAIR[1] - .5;   // keep the stairway's own strip clear
+  const backdrop = [], near = (x, y) => (x > STAIR[0] - .9 && x < STAIR[2] + .9 && y > STAIR[1] - .5) || (y > WSTAIR[1] - .9 && y < WSTAIR[3] + .9 && x < WSTAIR[2] + .5);   // right up against the stairways
   for (let y = 0; y < MH; y++) for (let x = 0; x < MW; x++) {      // the wooded hill: dense on the slopes, sparse on the flat
     const t = at(x, y), z = hz(x, y); if (t !== GRASS) continue;
     const behindHill = y < PLAT[1] || x >= PLAT[2], slope = z > 1;
     if (at(x + 1, y) === PLATT || at(x, y - 1) === PLATT) continue;   // leave the white retaining wall in view
-    if (V() > (slope ? .42 : .12) || near(x + .5, y + .5) || (y > STAIR[3] - 2 && Math.abs(x - (STAIR[0] + STAIR[2]) / 2) < 7)) continue;
+    if (V() > (slope ? .42 : .12) || near(x + .5, y + .5) || (y > STAIR[3] - 2 && Math.abs(x - (STAIR[0] + STAIR[2]) / 2) < 7) || (x < WSTAIR[0] + 3 && Math.abs(y - (WSTAIR[1] + WSTAIR[3]) / 2) < 4)) continue;
     const tx = q12(x + .2 + V() * .6), ty = q12(y + .2 + V() * .6), tr = treeAt(tx, ty, .9 + V() * .8, z, !behindHill);
     if (behindHill) backdrop.push(tr);
   }
@@ -720,6 +782,7 @@ function build() {
   for (const [x, y] of TREES) if (!HALLS.some(h => inR([h[0] - .5, h[1] - .5, h[2] + .5, h[3] + .5], x, y))) treeAt(x, y, 1.1 + V() * .6, PZ);
   for (const [x, y] of [[26.5, 25.5], [53.5, 25.5], [53.5, 50.5], [26.5, 50.5], [40, 24.5], [40, 51.5], [26.5, 38], [53.5, 38]]) lampAt(...o(x, y), PZ);
   stairway(); chinthe(...o(46.2, 92), false); chinthe(...o(51.8, 92), true);
+  westStairway(); chintheW(WSTAIR[0] + 1.3, WSTAIR[1] - 1.6, false); chintheW(WSTAIR[0] + 1.3, WSTAIR[3] + 1.6, true);
   for (const [x, y, k] of [[44.8, 90.2, 'flowers'], [44.8, 88.8, 'shoes'], [53.2, 90.2, 'flowers'], [53.2, 88.8, 'candles']]) stall(...o(x, y), k);
   return backdrop;
 }
@@ -826,6 +889,10 @@ function streetLife() {                                           // cars along 
     const t = V.pick(['car', 'car', 'taxi', 'bus', 'pickup']), col = t === 'bus' ? V.pick(BUSC) : V.pick(CARC);
     ents.push({ k: 'car', x: V() * MW, y, v: (dir === 'E' ? 1 : -1) * (1.6 + V() * .6), spr: vehicle(t, dir, col), r: V() });
   }
+  for (const [x, dir] of [[WROAD[0] + 1, 'S'], [WROAD[0] + 3, 'N']]) for (let i = 0; i < 5; i++) {   // U Wisara Road
+    const t = V.pick(['car', 'car', 'taxi', 'bus']), col = t === 'bus' ? V.pick(BUSC) : V.pick(CARC);
+    ents.push({ k: 'car', x, y: V() * MH, vy: (dir === 'S' ? 1 : -1) * (1.6 + V() * .6), spr: vehicle(t, dir, col), r: V() });
+  }
   for (let i = 0; i < 12; i++) {                                  // walking along the sidewalk and up to the gate
     const L = pilgrimLook(), pics = [standing(L, 'walk1', false), standing(L, 'walk2', false), standing(L, 'walk1', true), standing(L, 'walk2', true)];
     const x0 = V() * MW, sp = (.3 + V() * .2) * (V.p(.5) ? 1 : -1);
@@ -859,7 +926,10 @@ function update(dt) {
   T += dt;
   for (const e of ents) {
     if (e.k === 'vig') { if (e.tick) e.tick(e, dt); }
-    else if (e.k === 'car') { e.x += e.v * dt; if (e.x > MW + 3) e.x = -3; if (e.x < -3) e.x = MW + 3; }
+    else if (e.k === 'car') {
+      if (e.vy) { e.y += e.vy * dt; if (e.y > ROAD[0] - 1) e.y = -3; if (e.y < -3) e.y = ROAD[0] - 1; }   // U Wisara Road runs into the south road
+      else { e.x += e.v * dt; if (e.x > MW + 3) e.x = -3; if (e.x < -3) e.x = MW + 3; }
+    }
     else if (e.k === 'pig') { e.t -= dt; if (e.t < 0) { e.t = .4 + Math.random() * 1.5; e.x = e.hx + (Math.random() - .5) * 1.5; e.y = e.hy + (Math.random() - .5) * 1.5; } }
   }
   for (const b of flock) b.a += b.w * dt;
@@ -1008,7 +1078,7 @@ addEventListener('resize', resize);
     if (s.ecv) eg.drawImage(s.ecv, s.left, s.top);
     s.ecv = s.eg = s.g = null;
   }
-  pilgrims(); worshippers(); sweepers(); bellRinger(); candles(); birds(); streetLife();
+  pilgrims(); worshippers(); sweepers(); bellRinger(); candles(); birds(); streetLife(); escalator();
   resize(); camX = sx(CX, CY + 10) - vw / 2 + Math.min(80, vw * .08); camY = sy(CX, CY + 16, PZ + 30) - vh / 2; clampCam();   // the stupa, with the south stairway to its right
   document.getElementById('load').remove();
   tick(); setInterval(tick, 1000);

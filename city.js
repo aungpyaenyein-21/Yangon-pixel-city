@@ -715,14 +715,64 @@ function teaShop(x, y, door) {          // tables go out on two sidewalk tiles; 
 }
 const benches = [];
 function bench(x, y) { benches.push([x + .4, y + .45]); const s = spr(x, y + .3, x + .8, y + .6, 10, 3), g = s.g; box(g, x, y + .3, x + .8, y + .6, 2, 4, '#7A5C3E'); g.fillStyle = '#4A3726'; g.fillRect(sx(x + .1, y + .6), sy(x + .1, y + .6) - 2, 1, 2); }
-function busStop(x, y, alongX) {
+function busStop(x, y, alongX, name = 'ဘတ်စ်ကား', roadWest = false) {
   const [a, b, c, d] = alongX ? [x, y + .3, x + 2, y + .8] : [x + .2, y, x + .7, y + 2], s = spr(a, b, c, d, 46, 4), g = s.g, e = glow(s);
   g.fillStyle = '#555';
   for (const [u, v] of [[a, d], [c, d], [a, b], [c, b]]) g.fillRect(sx(u, v), sy(u, v, 1) - 16, 1, 16);
   box(g, a, b, c, d, 16, 18, '#2F6FD0', '#4A86E0');
   box(g, a + .2, b + .1, c - .2, d - .1, 3, 5, '#9A9A9A');
-  const t = signTex('ဘတ်စ်ကား', 'YBS', '#FFD600', '#0D47A1'), f = alongX ? { w: 0, k: d, a, b: c } : { w: 1, k: a, a: b, b: d };
+  const t = signTex(name, 'YBS', '#FFD600', '#0D47A1', 10), f = alongX ? { w: 0, k: d, a, b: c } : { w: 1, k: a, a: b, b: d };
   signOn(g, e, f, 18, t);
+  // people waiting at the kerb, facing the road, and someone on the bench
+  const kx = roadWest ? x + .15 : x + .85, kerb = alongX ? [[x + .6, y + .95], [x + 1.45, y + .95]] : [[kx, y + .55], [kx, y + 1.45]], back = !alongX && !roadWest;
+  kerb.forEach(([px, py], i) => {
+    const L = look(), w = i ? [[430, 600], [1000, 1150]] : [[400, 560], [990, 1140]];
+    vig(px, py, [standing(L, 'idle', back), standing(L, 'idle2', back)], { win: w.map(v => jit(v, 40)), seq: [[0, 4 + V() * 4], [1, 1.5 + V()]] });
+  });
+  const L = look(), [bx, by] = alongX ? [x + 1, y + .55] : [x + .45, y + 1];
+  vig(bx, by, [seated(L, 'sit', back), seated(L, 'fan', back)], { win: jit([520, 1100], 60), seq: [[0, 5 + V() * 5], [1, 1.2]] });
+}
+
+// the footbridge over Sule Pagoda Rd and Anawrahta Rd, just south of the cinemas (OSM: footway bridge + steps)
+const FB = 25;                                                   // deck height, px
+function footbridge() {
+  for (const [x, y] of [[64, 38], [64, 39], [64, 40], [64, 41], [64, 42], [69, 31], [69, 32], [69, 42], [69, 43], [69, 48], [69, 49], [69, 50], [69, 51], [69, 52], [69, 53]]) used.add(x + ',' + y);
+  const deck = (x0, y0, x1, y1, alongX) => {                     // a slab in the air: always drawn over what's under / behind it
+    const s = spr(x0, y0, x1, y1, FB + 8, 2), g = s.g; s.above = true;
+    box(g, x0, y0, x1, y1, FB, FB + 3, '#B8B2A6', '#A39D91');
+    const r = 1 / 12;
+    if (alongX) { box(g, x0, y0, x1, y0 + r, FB + 3, FB + 7, '#D6D1C6'); box(g, x0, y1 - r, x1, y1, FB + 3, FB + 7, '#D6D1C6'); }
+    else { box(g, x1 - r, y0, x1, y1, FB + 3, FB + 7, '#D6D1C6'); box(g, x0, y0, x0 + r, y1, FB + 3, FB + 7, '#D6D1C6'); }
+  };
+  const pillar = (x, y) => { const s = spr(x - .08, y - .08, x + .08, y + .08, FB + 2, 2); box(s.g, x - .08, y - .08, x + .08, y + .08, 0, FB, '#ABA59A'); };
+  const stairs = (x0, x1, yTop, dir) => {                         // steps down along the sidewalk, dir = -1 north / +1 south
+    const n = 12, d = 1 / 3, y0 = dir < 0 ? yTop - n * d : yTop, y1 = dir < 0 ? yTop : yTop + n * d, s = spr(x0, y0, x1, y1, FB + 6, 2), g = s.g;
+    const order = [...Array(n).keys()]; if (dir < 0) order.reverse();   // far steps first
+    for (const i of order) {
+      const a = dir < 0 ? yTop - (i + 1) * d : yTop + i * d, z = Math.round(FB + 3 - (i + 1) * (FB + 2) / n);
+      box(g, x0, a, x1, a + d, 0, Math.max(1, z), '#BDB7AB', '#D2CDC2');
+    }
+  };
+  stairs(64.2, 64.8, 42.2, -1);
+  for (const [x, y] of [[64.5, 42.5], [69.5, 43.5], [69.5, 48.5]]) pillar(x, y);
+  deck(64.2, 42.2, 69.8, 42.8, true);                            // across Sule Pagoda Rd
+  deck(69.2, 42.8, 69.8, 49.2, false);                           // across Anawrahta Rd
+  stairs(69.2, 69.8, 49.2, 1);
+}
+function bridgeWalkers() {                                         // a few people crossing slowly, over the traffic
+  const path = [[64.5, 42.5], [69.5, 42.5], [69.5, 49.1]], len = 5 + 6.6;
+  for (let i = 0; i < 3; i++) {
+    const L = look(), sp = .3 + V() * .1, rest = 3 + V() * 4, P = 2 * (len / sp + rest), ph = V() * P;
+    const pics = [standing(L, 'walk1', false), standing(L, 'walk2', false), standing(L, 'walk1', true), standing(L, 'walk2', true)];
+    vig(64.5, 42.5, pics, { z: FB + 3, win: jit([420, 1260], 90), tick: e => {
+      const t = (T + ph) % P, go = len / sp, out = t < go, back = t >= go + rest && t < 2 * go + rest;
+      let d = out ? t * sp : back ? len - (t - go - rest) * sp : t < go + rest ? len : 0;
+      const seg = d < 5 ? 0 : 1, u = seg ? (d - 5) / 6.6 : d / 5, [ax, ay] = path[seg], [bx, by] = path[seg + 1];
+      e.x = ax + (bx - ax) * u; e.y = ay + (by - ay) * u;
+      const moving = out || back, toward = back ? seg === 0 : seg === 1;   // going west or south = towards us
+      e.cur = pics[(toward ? 0 : 2) + (moving ? Math.floor(T * 3 + ph) % 2 : 0)];
+    } });
+  }
 }
 function railing(x0, x1) {
   const s = spr(x0, 154.85, x1, 155, 8, 2), g = s.g;
@@ -845,6 +895,7 @@ function building(x0, y0, x1, y1) {
   let fl = ri(2, 5) + (main ? ri(1, 2) : 0);
   if (main && chance(.05)) fl = ri(9, 12);
   if (x0 >= 56 && x1 <= 64 && y0 >= 26 && y1 <= 44) fl = ri(2, 3);   // opposite the cinemas
+  if (x0 >= 56 && x1 <= 82 && y0 >= 48 && y1 <= 60) fl = Math.min(fl, 3);   // keep the footbridge in view
   return shop(x0, y0, x1, y1, fl, stW, stS, main);
 }
 function lots() {
@@ -859,6 +910,7 @@ function lots() {
   fill(0, 0, MW, MH, PLAZA, 0);
 }
 function props() {
+  footbridge();
   for (let y = 91; y < 100; y++) for (let x = 88; x < 97; x++) used.add(x + ',' + y);   // an open lawn for the morning exercise group
   for (let n = 0; n < 90; n++) {                         // park trees
     const x = 70.5 + rnd() * 27, y = 89.5 + rnd() * 35;
@@ -887,6 +939,7 @@ function props() {
   }
   for (let y = 49; y < 126; y++) if (at(130, y) === WALK && at(131, y) === LOT && free1(130, y)) bookSpot(130, y);   // Pansodan booksellers (east sidewalk: the west one is hidden from this camera)
   for (const [x, y, ax] of [[28, 83, 1], [110, 83, 1], [40, 43, 1], [64, 58, 0], [64, 112, 0]]) if (free1(x, y)) busStop(x, y, ax);
+  busStop(69, 31, 0, 'ဆူးလေ ရုပ်ရှင်ရုံ', true);               // the YBS stop by the cinemas (OSM), between the two of them
   for (let n = 0; n < 12; n++) { const x = 70.5 + rnd() * 27, y = 106.2; if (at(x | 0, 106) === GRASS) bench(q12(x), 106); }
   const quiet = [];                                       // chinlone: quiet streets without through traffic
   for (const [x0, x1, y0, y1] of NS) if (x1 - x0 === 2 && y1 < 148) for (let y = y0 + 3; y < y1 - 3; y++) quiet.push([x0 + 1, y + .5]);
@@ -1394,6 +1447,7 @@ function update(dt) {
 }
 
 function behind(ex, ey, s) {
+  if (s.above) return true;                        // bridge decks: anything they overlap on screen is under or behind them
   if (s.round) return ey - ex < CY - CX;
   if (ex >= s.x0 && ex <= s.x1 && ey >= s.y0 && ey <= s.y1) return ey - ex < (s.y0 + s.y1 - s.x0 - s.x1) / 2;
   return ex > s.x0 && ey < s.y1;
@@ -1539,7 +1593,7 @@ addEventListener('resize', resize);
     if (s.ecv) eg.drawImage(s.ecv, s.left, s.top);
     s.ecv = s.eg = s.g = null;
   }
-  populate(); riverside(); suleLife(); parkLife(); upperLife();
+  populate(); riverside(); suleLife(); parkLife(); upperLife(); bridgeWalkers();
   resize(); camX = sx(CX, CY) - vw / 2; camY = sy(CX, CY, 60) - vh / 2; clampCam();
   document.getElementById('load').remove();
   tick(); setInterval(tick, 1000);

@@ -577,18 +577,8 @@ const ROOF_GREEN = '#2E8570', ROOF_GOLD = '#D9A93A', ROOF_RED = '#8E2F24';
 const roofCol = () => { const r = V(); return r < .55 ? ROOF_GREEN : r < .9 ? ROOF_GOLD : ROOF_RED; };
 const WALLC = ['#F3EDE1', '#F6F1E6', '#EFE7D6'];
 function hall(x0, y0, x1, y1) {
-  const long = Math.max(x1 - x0, y1 - y0) > 12, h = long ? 9 : 8 + V.i(0, 1) * 2;
+  const h = 8 + V.i(0, 1) * 2;
   const s = spr(x0, y0, x1, y1, PZ + h + 110, 4), g = s.g, e = glow(s), wall = V.pick(WALLC), roof = roofCol();
-  if (long) {                                                     // a covered walkway: rows of gilded pillars under a thin deep-red roof
-    for (const f of faces(x0, y0, x1, y1)) for (let u = f.a + .2; u < f.b; u += 1) {
-      fr(g, f, u, u + .17, PZ, PZ + h, sh('#D9A93A', f.s)); fr(g, f, u, u + .17, PZ + h - 2, PZ + h, sh('#F0CF72', f.s));
-    }
-    box(g, x0, y0, x1, y1, PZ + h, PZ + h + 2, ROOF_RED, sh(ROOF_RED, 1.15));
-    for (const f of faces(x0, y0, x1, y1)) fr(g, f, f.a, f.b, PZ + h + 1, PZ + h + 2, TRIM);   // gold edge
-    const alongY = y1 - y0 > x1 - x0, c = alongY ? (x0 + x1) / 2 : (y0 + y1) / 2;   // a gold ridge line down the middle
-    if (alongY) tF(g, c - 1 / 12, y0, c + 1 / 12, y1, PZ + h + 2, TRIM); else tF(g, x0, c - 1 / 12, x1, c + 1 / 12, PZ + h + 2, TRIM);
-    return s;
-  }
   box(g, x0, y0, x1, y1, PZ, PZ + h, wall, '#CFC6B4');
   for (const f of faces(x0, y0, x1, y1)) {
     for (let u = f.a + .2; u < f.b - .4; u += 1) {                  // arched openings, pillars, a glimpse of gold inside
@@ -700,7 +690,7 @@ function build() {
   backdrop.sort((a, b) => (a.y1 - a.x0) - (b.y1 - b.x0));
   stupa();
   for (const [x, y, k] of SMALL) (k === 1 ? shrine : smallStupa)(x, y, inR(BASE, x, y) ? BZ : PZ, k);
-  for (const h of HALLS) hall(...h);
+  for (const h of HALLS) if (Math.max(h[2] - h[0], h[3] - h[1]) <= 12) hall(...h);   // the two long walkway sheds are left out: open marble reads better
   for (const p of POSTS) post(p);
   for (const [x, y] of BELLS) bellPavilion(x, y);
   shrine(...RELICWELL, PZ);

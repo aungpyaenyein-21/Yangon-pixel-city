@@ -341,6 +341,7 @@ function standing(L, pose, back) {                     // 7×15, feet on the gro
     else if (pose === 'strike') { P(1, 6, 1, 2, L.shirt); P(5, 3, 1, 3, L.shirt); P(5, 2, 1, 1, L.skin); P(6, 0, 1, 3, '#6B4A2E'); }   // the wooden striker raised
     else { down(1); down(5); }
     if (L.flowers && !bend) { P(5, 6, 2, 1, '#3A8A3A'); P(5, 5, 2, 1, L.flowers); }
+    if (L.bowl && !back) { P(2, 7, 3, 2, '#1E1E1E'); P(2, 7, 3, 1, '#3A3A3A'); }   // the black alms bowl held in front
     if (L.hat) { P(1, 2, 5, 1, '#E8DCC0'); P(2, 1, 3, 1, '#D9CBA8'); }
     const leg = (x, y0) => { P(x, y0, 1, 14 - y0, L.skin); P(x, 14, 1, 1, L.bare ? L.skin : SHOE); }, top = 9 + low;
     if (pose === 'kick') { leg(2, top); P(4, 11, 1, 1, L.skin); P(5, 10, 1, 1, L.skin); P(6, 9, 1, 1, SHOE); }   // sole up behind, the chinlone way
@@ -451,6 +452,7 @@ const STAIR = [...o(47.5, 64), ...o(50.5, 91)];  // the southern covered stairwa
 const ROAD = [96 + OFF[1], 100 + OFF[1]];
 const WSTAIR = [6, 45.5 + OFF[1], PLAT[0], 48.5 + OFF[1]];   // the western stairway (OSM), the longest, down to U Wisara Road
 const WROAD = [1, 5];                            // U Wisara Road, along the west edge
+const RZ = Math.round(PZ * .45), KYAUNG = [56, 87, 61, 91];   // the lower ring path's height; a monastery beside it (south side)
 const inR = (r, x, y) => x >= r[0] && x < r[2] && y >= r[1] && y < r[3];
 // planetary posts (OSM): day, x, y, animal
 const POSTS = [['sun', 47.2, 24.8, 'garuda'], ['mon', 53, 34.4, 'tiger'], ['tue', 54, 45, 'lion'], ['wed', 43.8, 53.5, 'elephant'],
@@ -478,6 +480,7 @@ function layout() {
     const lv = LEVELS.find(([dm]) => d <= dm);
     HZ[i] = lv ? lv[1] : 1;
     G[i] = d <= 0 ? PLATT : lv && lv === LEVELS[3] ? LOWRING : GRASS;
+    if (inR(KYAUNG, x, y)) { G[i] = LOWRING; HZ[i] = RZ; }        // the monastery's yard, cut into the slope
   }
 }
 const GC = { [GRASS]: '#6E9E45', [ROADT]: '#5B5E64', [WALK]: '#CEC6B4', [LOWRING]: '#BDB6A8' };
@@ -600,21 +603,21 @@ function shrine(x, y, z) {
 const ROOF_GREEN = '#2E8570', ROOF_GOLD = '#D9A93A', ROOF_RED = '#8E2F24';
 const roofCol = () => { const r = V(); return r < .55 ? ROOF_GREEN : r < .9 ? ROOF_GOLD : ROOF_RED; };
 const WALLC = ['#F3EDE1', '#F6F1E6', '#EFE7D6'];
-function hall(x0, y0, x1, y1) {
+function hall(x0, y0, x1, y1, Z = PZ, wallC, roofC) {
   const h = 8 + V.i(0, 1) * 2;
-  const s = spr(x0, y0, x1, y1, PZ + h + 110, 4), g = s.g, e = glow(s), wall = V.pick(WALLC), roof = roofCol();
-  box(g, x0, y0, x1, y1, PZ, PZ + h, wall, '#CFC6B4');
+  const s = spr(x0, y0, x1, y1, Z + h + 110, 4), g = s.g, e = glow(s), wall = wallC || V.pick(WALLC), roof = roofC || roofCol();
+  box(g, x0, y0, x1, y1, Z, Z + h, wall, sh(wall, .85));
   for (const f of faces(x0, y0, x1, y1)) {
     for (let u = f.a + .2; u < f.b - .4; u += 1) {                  // arched openings, pillars, a glimpse of gold inside
-      fr(g, f, u, u + .6, PZ, PZ + h - 4, sh('#D9A93A', f.s)); fr(g, f, u + .08, u + .52, PZ, PZ + h - 5, sh('#3A2A24', f.s));
-      if (V.p(.5)) fr(g, f, u + .22, u + .38, PZ + 2, PZ + 7, sh('#E8B83A', f.s));
-      fr(e, f, u + .08, u + .52, PZ, PZ + h - 5, '#FFD690');
+      fr(g, f, u, u + .6, Z, Z + h - 4, sh('#D9A93A', f.s)); fr(g, f, u + .08, u + .52, Z, Z + h - 5, sh('#3A2A24', f.s));
+      if (V.p(.5)) fr(g, f, u + .22, u + .38, Z + 2, Z + 7, sh('#E8B83A', f.s));
+      fr(e, f, u + .08, u + .52, Z, Z + h - 5, '#FFD690');
     }
-    fr(g, f, f.a, f.b, PZ + h - 2, PZ + h, sh('#D9A93A', f.s));
+    fr(g, f, f.a, f.b, Z + h - 2, Z + h, sh('#D9A93A', f.s));
   }
   // a low hipped roof over the hall (two layers on big ones), then a pyatthat rising from the middle
   const w = x1 - x0, d = y1 - y0, m = Math.min(w, d), cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
-  let z = PZ + h;
+  let z = Z + h;
   roofTier(g, cx, cy, z, q12(w / 2 + .15), q12(d / 2 + .15), 4, roof); z += 4;
   if (m > 3) { roofTier(g, cx, cy, z, q12(w / 2 * .62), q12(d / 2 * .62), 3, roof); z += 3; }
   const r = q12(Math.max(.4, Math.min(1.1, m * .25))), n = m < 2 ? 3 : m < 4 ? 5 : 7;
@@ -782,6 +785,8 @@ function build() {
   for (const [x, y] of TREES) if (!HALLS.some(h => inR([h[0] - .5, h[1] - .5, h[2] + .5, h[3] + .5], x, y))) treeAt(x, y, 1.1 + V() * .6, PZ);
   for (const [x, y] of [[26.5, 25.5], [53.5, 25.5], [53.5, 50.5], [26.5, 50.5], [40, 24.5], [40, 51.5], [26.5, 38], [53.5, 38]]) lampAt(...o(x, y), PZ);
   stairway(); chinthe(...o(46.2, 92), false); chinthe(...o(51.8, 92), true);
+  hall(KYAUNG[0] + .3, KYAUNG[1] + .3, KYAUNG[2] - .3, KYAUNG[3] - .4, RZ, '#8A5A34', '#6B4226');   // teak monastery, gold trim
+  treeAt(40, 92.2, 1.5, RZ);                                     // the shade tree on the lower ring
   westStairway(); chintheW(WSTAIR[0] + 1.3, WSTAIR[1] - 1.6, false); chintheW(WSTAIR[0] + 1.3, WSTAIR[3] + 1.6, true);
   for (const [x, y, k] of [[44.8, 90.2, 'flowers'], [44.8, 88.8, 'shoes'], [53.2, 90.2, 'flowers'], [53.2, 88.8, 'candles']]) stall(...o(x, y), k);
   return backdrop;
@@ -883,6 +888,46 @@ function candles() {
 function birds() {                                                // pigeons on the marble; a slow wheel of birds round the spire
   for (let i = 0; i < 30; i++) { const x = CX - 8 + V() * 16, y = CY + 13 + V() * 3; ents.push({ k: 'pig', x, y, hx: x, hy: y, t: V() * 2, r: 0, z: PZ + 1 }); }
   for (let i = 0; i < 22; i++) flock.push({ a: V() * 6.28, r: 5 + V() * 7, z: PZ + 120 + V() * 90, w: (.2 + V() * .25) * (i % 3 ? 1 : -1) });
+}
+// ── the lower ring path, half way down the hill (south and west sides) ─────
+// one L-shaped walk: from the east end of the south side, west to the corner, then north up the west side
+const LR = { e: 97, s: 92, w: 21.5, n: 20 }, LS = LR.e - LR.w, LLEN = LS + LR.s - LR.n;
+function lowPt(u) { return u < LS ? [LR.e - u, LR.s, -1, 0] : [LR.w, LR.s - (u - LS), 0, -1]; }
+const walkPics = L => [standing(L, 'walk1', false), standing(L, 'walk2', false), standing(L, 'walk1', true), standing(L, 'walk2', true)];
+const robed = (L, k = 'monk') => { L.shirt = L.low = ROBE[k][0]; L.hair = L.skin; L.woman = false; L.bare = true; return L; };
+function lowerRing() {
+  for (let i = 0; i < 12; i++) {                                  // barefoot walkers, going both ways, few and far between
+    const L = pilgrimLook(), pics = walkPics(L), sp = (.2 + V() * .1) * (V.p(.5) ? 1 : -1), u0 = V() * LLEN, off = (V() - .5) * 1.4;
+    const e = vig(0, 0, pics, { z: RZ + 1, win: jit(V.pick([[300, 660], [900, 1200], [360, 1140]]), 60) });
+    e.tick = e => {
+      const u = ((u0 + T * sp) % LLEN + LLEN) % LLEN, [x, y, dx, dy] = lowPt(u);
+      e.x = x + (dy ? off : 0); e.y = y + (dx ? off : 0);
+      const toward = sp > 0 ? (dx < 0 || dy > 0) : !(dx < 0 || dy > 0);
+      e.cur = pics[(toward ? 0 : 2) + Math.floor(T * 3 + i) % 2];
+    };
+  }
+  {                                                               // a novice sweeping the monastery yard, morning and late afternoon
+    const L = robed(look('man')), pics = [standing(L, 'broom1', false), standing(L, 'broom2', false)];
+    const e = vig(0, 0, pics, { z: RZ + 1, win: [[330, 480], [960, 1080]] });
+    e.tick = e => { const t = (T * .1) % 8; e.x = KYAUNG[0] + .5 + (t < 4 ? t : 8 - t); e.y = KYAUNG[3] + .3; e.cur = pics[Math.floor(T * 1.6) % 2]; };
+  }
+  {                                                               // a monk sitting under the tree, now and then reading a palm-leaf book
+    const L = robed(look('man')); L.book = '#E3CF96';
+    vig(40.3, 92.9, [seated(L, 'idle', false), seated(L, 'read', false)], { z: RZ + 1, win: jit([420, 1080], 40), seq: [[0, 20 + V() * 20], [1, 30]] });
+  }
+  for (let i = 0; i < 9; i++) {                                   // the alms round at dawn: monks in single file, eldest first, bowls in front
+    const L = robed(look('man')); if (i > 5) L.low = L.shirt = '#9C2A22';   // novices at the back
+    L.bowl = true;
+    const pics = walkPics(L), start = LR.e - KYAUNG[0] - 2.5;       // they leave from the monastery gate
+    const e = vig(0, 0, pics, { z: RZ + 1, win: [330, 420] });
+    e.tick = e => {
+      const u = start + (T * .28) % (LLEN - start + 12) - i * .9;
+      e.hide = u < start || u > LLEN; if (e.hide) return;
+      const [x, y, dx] = lowPt(u); e.x = x; e.y = y + (dx ? -.3 : 0); if (!dx) e.x = x + .3;
+      e.cur = pics[(dx < 0 ? 0 : 2) + Math.floor(T * 2.4 + i) % 2];
+    };
+    e.show = e => !e.hide;
+  }
 }
 function streetLife() {                                           // cars along the road at the foot of the hill, people arriving
   for (const [y, dir] of [[ROAD[0] + 1, 'W'], [ROAD[0] + 3, 'E']]) for (let i = 0; i < 5; i++) {
@@ -1078,7 +1123,7 @@ addEventListener('resize', resize);
     if (s.ecv) eg.drawImage(s.ecv, s.left, s.top);
     s.ecv = s.eg = s.g = null;
   }
-  pilgrims(); worshippers(); sweepers(); bellRinger(); candles(); birds(); streetLife(); escalator();
+  pilgrims(); worshippers(); sweepers(); bellRinger(); candles(); birds(); streetLife(); escalator(); lowerRing();
   resize(); camX = sx(CX, CY + 10) - vw / 2 + Math.min(80, vw * .08); camY = sy(CX, CY + 16, PZ + 30) - vh / 2; clampCam();   // the stupa, with the south stairway to its right
   document.getElementById('load').remove();
   tick(); setInterval(tick, 1000);

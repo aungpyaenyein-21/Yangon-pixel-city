@@ -4,7 +4,7 @@
 
 // ── projection: 2:1 isometric, camera looks from the south-west ─────────────
 const HW = 12, HH = 6, FL = 10;              // half tile (1 tile ≈ 5 m), px per storey
-const MW = 80, MH = 104;                      // map in tiles: x → east, y → south (1 tile ≈ 5 m)
+const MW = 100, MH = 120;                     // map in tiles: x → east, y → south (1 tile ≈ 5 m)
 const OY = MW * HH + 170;                     // headroom for the stupa
 const CW = (MW + MH) * HW, CH = OY + MH * HH + 40;
 const sx = (x, y) => Math.round((x + y) * HW);
@@ -440,48 +440,68 @@ const HALLS = [[41.5,55.0,44.5,57.75],[45.75,49.75,60.25,57.25],[46.5,49.5,53.0,
 const TREES = [[26.25,62.25],[35.75,59.25],[38.0,58.75],[50.75,11.75],[63.75,51.0],[16.5,10.75],[65.5,17.75],[66.0,19.75],[62.25,20.0],[63.25,23.25],[63.5,54.75],[66.0,43.5],[65.5,42.0],[40.0,62.0],[42.0,61.0],[21.5,61.25],[23.0,57.5],[16.5,60.25],[12.5,54.75],[15.0,52.25],[16.75,55.25],[12.5,48.25],[19.0,53.75],[21.25,50.5],[18.75,49.0],[20.0,47.25],[13.75,42.0],[12.0,41.5],[15.25,36.75],[12.5,38.75],[12.0,37.25],[17.0,37.5],[18.0,39.75],[35.5,8.75],[36.25,4.0],[39.5,5.25],[43.0,16.5],[29.0,53.0],[18.5,28.25],[19.5,29.0],[17.0,21.25]];
 
 // ── the scene ─────────────────────────────────────────────────────────────────
-const [CX, CY] = [40, 38];                       // the main stupa
-const PZ = 40, BZ = PZ + 7;                      // platform height above the street; top of the stupa's lower terrace
-const PLAT = [11, 1, 67, 64], BASE = [28.5, 26.5, 51.5, 49.5], INNER = [32, 30, 48, 46];
-const STAIR = [47.5, 64, 50.5, 91];              // the southern covered stairway
-const ROAD = [96, 100];
+// the OSM layout above was laid out with the stupa at (40, 38); everything moves by one offset to leave room for the hill
+const OFF = [14, 16], o = (x, y) => [x + OFF[0], y + OFF[1]];
+for (const a of [SMALL, TREES]) for (const p of a) { p[0] += OFF[0]; p[1] += OFF[1]; }
+for (const h of HALLS) { h[0] += OFF[0]; h[2] += OFF[0]; h[1] += OFF[1]; h[3] += OFF[1]; }
+const [CX, CY] = o(40, 38);                      // the main stupa
+const PZ = 115, BZ = PZ + 7;                     // Singuttara Hill: the platform ~50 m above the street (stupa : hill ≈ 2 : 1)
+const PLAT = [...o(11, 1), ...o(67, 64)], BASE = [...o(28.5, 26.5), ...o(51.5, 49.5)], INNER = [...o(32, 30), ...o(48, 46)];
+const STAIR = [...o(47.5, 64), ...o(50.5, 91)];  // the southern covered stairway
+const ROAD = [96 + OFF[1], 100 + OFF[1]];
 const inR = (r, x, y) => x >= r[0] && x < r[2] && y >= r[1] && y < r[3];
 // planetary posts (OSM): day, x, y, animal
 const POSTS = [['sun', 47.2, 24.8, 'garuda'], ['mon', 53, 34.4, 'tiger'], ['tue', 54, 45, 'lion'], ['wed', 43.8, 53.5, 'elephant'],
-  ['sat', 32.6, 54.5, 'naga'], ['thu', 27.6, 41.4, 'rat'], ['rahu', 26.4, 30.4, 'tusker'], ['fri', 36.4, 25.2, 'guineapig']];
-const BELLS = [[21.6, 23.4], [50.6, 18.4]];      // King Singu's bell (NW), King Tharyarwady's bell (NE)
-const AUNGMYAY = [28, 19.5];                      // the "victory ground" where people kneel to make a wish
-const RELICWELL = [31.6, 22.6];
+  ['sat', 32.6, 54.5, 'naga'], ['thu', 27.6, 41.4, 'rat'], ['rahu', 26.4, 30.4, 'tusker'], ['fri', 36.4, 25.2, 'guineapig']].map(([d, x, y, a]) => [d, ...o(x, y), a]);
+const BELLS = [o(21.6, 23.4), o(50.6, 18.4)];    // King Singu's bell (NW), King Tharyarwady's bell (NE)
+const AUNGMYAY = o(28, 19.5);                     // the "victory ground" where people kneel to make a wish
+const RELICWELL = o(31.6, 22.6);
 
-// ground: the hill, the street at the foot of the stairs, and the platform on top
-const G = new Uint8Array(MW * MH);
-const GRASS = 0, ROADT = 1, WALK = 2;
+// ground: the terraced hill, the lower ring path, the street at the foot of the stairs, and the platform on top
+const G = new Uint8Array(MW * MH), HZ = new Uint8Array(MW * MH);
+const GRASS = 0, ROADT = 1, WALK = 2, PLATT = 3, LOWRING = 4;
 const at = (x, y) => (x < 0 || y < 0 || x >= MW || y >= MH ? -1 : G[y * MW + x]);
+const hz = (x, y) => (x < 0 || y < 0 || x >= MW || y >= MH ? 0 : HZ[y * MW + x]);
+// terraces by distance (tiles) outside the platform: white retaining wall, wooded slope, the lower ring path, slope, foot, street
+const LEVELS = [[0, PZ], [3, PZ - 30], [6, Math.round(PZ * .65)], [8, Math.round(PZ * .45)], [11, Math.round(PZ * .28)], [14, Math.round(PZ * .12)]];
 function layout() {
-  for (let y = 0; y < MH; y++) for (let x = 0; x < MW; x++) G[y * MW + x] = y >= ROAD[0] && y < ROAD[1] ? ROADT : y === ROAD[0] - 1 || y === ROAD[1] ? WALK : GRASS;
-}
-const GC = { [GRASS]: '#6E9E45', [ROADT]: '#5B5E64', [WALK]: '#CEC6B4' };
-const MARBLE = ['#F1EDE4', '#E7E1D5'];
-function ground(g, backdrop) {
-  for (let y = 0; y < MH; y++) for (let x = MW - 1; x >= 0;) {
-    const t = G[y * MW + x]; let a = x; while (a > 0 && G[y * MW + a - 1] === t) a--;
-    tF(g, a, y, x + 1, y + 1, t === ROADT ? 0 : 1, GC[t]); x = a - 1;
-  }
+  const ks = 15 / (STAIR[3] - PLAT[3]);                          // the south slope is stretched out to the foot of the stairway
   for (let y = 0; y < MH; y++) for (let x = 0; x < MW; x++) {
-    const t = G[y * MW + x];
-    if (t === GRASS) for (let k = 0; k < 3; k++) { const u = x + rnd(), v = y + rnd(); g.fillStyle = chance(.5) ? '#5E8C3A' : '#86B65A'; g.fillRect(sx(u, v), sy(u, v, 1) - 1, 1, 1); }
-    if (t === ROADT && y === ROAD[0] + 2 && x % 2) { g.fillStyle = '#DCD9CC'; for (let c = sx(x, y), e = sx(x + .5, y); c < e; c++) g.fillRect(c, bs(c, y), 1, 1); }
-    if (t === WALK) { wF(g, x, y, y + 1, 1, 2, '#BDB5A3'); if (at(x, y + 1) === ROADT) sF(g, y + 1, x, x + 1, 0, 1, '#8B8475'); }
+    const i = y * MW + x, cx = x + .5, cy = y + .5;
+    if (y >= ROAD[0] && y < ROAD[1]) { G[i] = ROADT; continue; }
+    if (y === ROAD[0] - 1 || y === ROAD[1]) { G[i] = WALK; HZ[i] = 1; continue; }
+    const d = Math.ceil(Math.max(PLAT[0] - cx, cx - PLAT[2], PLAT[1] - cy, (cy - PLAT[3]) * ks));
+    const lv = LEVELS.find(([dm]) => d <= dm);
+    HZ[i] = lv ? lv[1] : 1;
+    G[i] = d <= 0 ? PLATT : lv && lv === LEVELS[3] ? LOWRING : GRASS;
   }
-  for (const s of backdrop) g.drawImage(s.cv, s.left, s.top);   // trees behind the hilltop
-  // the platform on the hill: white retaining walls, marble on top
+}
+const GC = { [GRASS]: '#6E9E45', [ROADT]: '#5B5E64', [WALK]: '#CEC6B4', [LOWRING]: '#BDB6A8' };
+const MARBLE = ['#F1EDE4', '#E7E1D5'];
+function tile(g, x, y) {
+  const t = G[y * MW + x], z = t === ROADT ? 0 : HZ[y * MW + x];
+  tF(g, x, y, x + 1, y + 1, z, t === PLATT ? MARBLE[(x + y) & 1] : GC[t]);
+  if (t === GRASS) for (let k = 0; k < 3; k++) { const u = x + rnd(), v = y + rnd(); g.fillStyle = chance(.5) ? '#5E8C3A' : '#86B65A'; g.fillRect(sx(u, v), sy(u, v, z) - 1, 1, 1); }
+  if (t === LOWRING && chance(.3)) { const u = x + rnd(), v = y + rnd(); g.fillStyle = '#A9A294'; g.fillRect(sx(u, v), sy(u, v, z) - 1, 2, 1); }
+  if (t === ROADT && y === ROAD[0] + 2 && x % 2) { g.fillStyle = '#DCD9CC'; for (let c = sx(x, y), e = sx(x + .5, y); c < e; c++) g.fillRect(c, bs(c, y), 1, 1); }
+  // where the ground drops towards us (south / west), show the drop: white retaining wall, red earth, or a kerb
+  const wall = (f, lo) => {
+    if (t === PLATT) { fr(g, f, f.a, f.b, lo, z, sh('#E4DCCB', f.s)); fr(g, f, f.a, f.b, z - 5, z - 3, sh('#CFC5B1', f.s)); if (z - lo > 20) fr(g, f, f.a, f.b, lo + 4, lo + 6, sh('#CFC5B1', f.s)); }
+    else if (t === WALK || t === LOWRING) fr(g, f, f.a, f.b, lo, z, sh(t === LOWRING ? '#A39C8E' : '#8B8475', f.s));
+    else { fr(g, f, f.a, f.b, lo, z, sh('#9A5A3C', f.s)); fr(g, f, f.a, f.b, z - 1, z, sh('#5E8C3A', f.s)); }
+  };
+  const zs = y + 1 < MH ? (G[(y + 1) * MW + x] === ROADT ? 0 : HZ[(y + 1) * MW + x]) : 0, zw = x > 0 ? (G[y * MW + x - 1] === ROADT ? 0 : HZ[y * MW + x - 1]) : 0;
+  if (zs < z) wall({ w: 0, k: y + 1, a: x, b: x + 1, s: .8 }, zs);
+  if (zw < z) wall({ w: 1, k: x, a: y, b: y + 1, s: 1 }, zw);
+}
+function ground(g, backdrop) {
+  const byDiag = new Map();                                        // trees behind the hilltop are baked in, in depth order with the ground
+  for (const s of backdrop) { const k = Math.floor(s.ty) - Math.floor(s.tx); if (!byDiag.has(k)) byDiag.set(k, []); byDiag.get(k).push(s); }
+  for (let d = -MW; d <= MH; d++) {
+    for (let x = MW - 1; x >= 0; x--) { const y = x + d; if (y >= 0 && y < MH) tile(g, x, y); }
+    for (const s of byDiag.get(d) || []) g.drawImage(s.cv, s.left, s.top);
+  }
   const [x0, y0, x1, y1] = PLAT;
-  box(g, x0, y0, x1, y1, 0, PZ, '#E4DCCB', MARBLE[0]);
-  for (const f of faces(x0, y0, x1, y1)) {
-    for (const z of [6, PZ - 4]) fr(g, f, f.a, f.b, z, z + 2, sh('#CFC5B1', f.s));
-    for (let u = f.a + 1; u < f.b - 1; u += 2) fr(g, f, u, u + .25, 10, PZ - 8, sh('#D6CDB9', f.s));
-  }
-  for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) tF(g, x, y, x + 1, y + 1, PZ, MARBLE[(x + y) & 1]);
   // the pilgrims' walk around the stupa: a darker band of worn stone
   for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) {
     const d = Math.max(Math.abs(x + .5 - CX), Math.abs(y + .5 - CY));
@@ -495,7 +515,7 @@ function ground(g, backdrop) {
 // the main stupa: gilded terraces, octagonal dais, the bell, bowl, lotus, banana bud, hti, vane and diamond orb
 const hash = k => { const v = Math.sin(k * 12.9898 + 78.233) * 43758.5453; return v - Math.floor(v); };
 function stupa() {
-  const s = spr(...INNER, 350, 6), g = s.g, e = glow(s);
+  const s = spr(...INNER, BZ + 310, 6), g = s.g, e = glow(s);
   s.round = 1; s.cx = CX; s.cy = CY;
   const terr = [[32, 30, 48, 46, 0, 9], [33.5, 31.5, 46.5, 44.5, 9, 18], [35, 33, 45, 43, 18, 26]];
   for (const [a, b, c, d, z0, z1] of terr) {
@@ -623,6 +643,7 @@ function bellPavilion(x, y) {
 function treeAt(x, y, R, z, keep = true) {                         // the shared tree, standing on the platform or the hill
   const th = V.i(6, 10), rx = Math.round(R * 15), ry = Math.round(R * 12);
   const s = spr(x - .2, y - .2, x + .2, y + .2, z + th + 2 * ry + 12, rx + 12, keep), g = s.g, X = sx(x, y), Y = sy(x, y, z);
+  s.tx = x; s.ty = y;
   g.fillStyle = '#6B4A2E'; g.fillRect(X - 1, Y - th - 4, 2, th + 4);
   const Yc = Y - th - ry + 4;
   blob(g, X - Math.round(rx * .45), Yc - Math.round(ry * .3), Math.round(rx * .65), Math.round(ry * .65), TREE);
@@ -681,13 +702,15 @@ function stall(x, y, kind) {                                       // flower and
 }
 
 function build() {
-  const backdrop = [];
-  for (let n = 0; n < 60; n++) {                                  // hill trees behind the platform (baked into the ground)
-    const x = V() * MW, y = V() * 4;
-    if (x > 5) backdrop.push(treeAt(q12(x), q12(y), 1 + V() * .8, 1, false));
+  const backdrop = [], near = (x, y) => x > STAIR[0] - 1.6 && x < STAIR[2] + 1.6 && y > STAIR[1] - .5;   // keep the stairway's own strip clear
+  for (let y = 0; y < MH; y++) for (let x = 0; x < MW; x++) {      // the wooded hill: dense on the slopes, sparse on the flat
+    const t = at(x, y), z = hz(x, y); if (t !== GRASS) continue;
+    const behindHill = y < PLAT[1] || x >= PLAT[2], slope = z > 1;
+    if (at(x + 1, y) === PLATT || at(x, y - 1) === PLATT) continue;   // leave the white retaining wall in view
+    if (V() > (slope ? .42 : .12) || near(x + .5, y + .5) || (y > STAIR[3] - 2 && Math.abs(x - (STAIR[0] + STAIR[2]) / 2) < 7)) continue;
+    const tx = q12(x + .2 + V() * .6), ty = q12(y + .2 + V() * .6), tr = treeAt(tx, ty, .9 + V() * .8, z, !behindHill);
+    if (behindHill) backdrop.push(tr);
   }
-  for (let n = 0; n < 40; n++) { const x = 67.5 + V() * 12, y = 2 + V() * 60; backdrop.push(treeAt(q12(x), q12(y), 1 + V() * .8, 1, false)); }
-  backdrop.sort((a, b) => (a.y1 - a.x0) - (b.y1 - b.x0));
   stupa();
   for (const [x, y, k] of SMALL) (k === 1 ? shrine : smallStupa)(x, y, inR(BASE, x, y) ? BZ : PZ, k);
   for (const h of HALLS) if (Math.max(h[2] - h[0], h[3] - h[1]) <= 12) hall(...h);   // the two long walkway sheds are left out: open marble reads better
@@ -695,15 +718,9 @@ function build() {
   for (const [x, y] of BELLS) bellPavilion(x, y);
   shrine(...RELICWELL, PZ);
   for (const [x, y] of TREES) if (!HALLS.some(h => inR([h[0] - .5, h[1] - .5, h[2] + .5, h[3] + .5], x, y))) treeAt(x, y, 1.1 + V() * .6, PZ);
-  for (const [x, y] of [[26.5, 25.5], [53.5, 25.5], [53.5, 50.5], [26.5, 50.5], [40, 24.5], [40, 51.5], [26.5, 38], [53.5, 38]]) lampAt(x, y, PZ);
-  stairway(); chinthe(46.2, 92, false); chinthe(51.8, 92, true);
-  for (const [x, y, k] of [[44.8, 90.2, 'flowers'], [44.8, 88.8, 'shoes'], [53.2, 90.2, 'flowers'], [53.2, 88.8, 'candles']]) stall(x, y, k);
-  for (let n = 0; n < 160; n++) {                                  // the wooded hillside in front of the platform
-    const x = V() * MW, y = 64.5 + V() * 30;
-    if ((x > 42 && x < 56) || y > ROAD[0] - 1.5) continue;
-    treeAt(q12(x), q12(y), 1 + V() * .9, 1);
-  }
-  for (let n = 0; n < 40; n++) { const x = V() * 10.5, y = 2 + V() * 62; treeAt(q12(x), q12(y), 1 + V() * .8, 1); }
+  for (const [x, y] of [[26.5, 25.5], [53.5, 25.5], [53.5, 50.5], [26.5, 50.5], [40, 24.5], [40, 51.5], [26.5, 38], [53.5, 38]]) lampAt(...o(x, y), PZ);
+  stairway(); chinthe(...o(46.2, 92), false); chinthe(...o(51.8, 92), true);
+  for (const [x, y, k] of [[44.8, 90.2, 'flowers'], [44.8, 88.8, 'shoes'], [53.2, 90.2, 'flowers'], [53.2, 88.8, 'candles']]) stall(...o(x, y), k);
   return backdrop;
 }
 
@@ -814,8 +831,8 @@ function streetLife() {                                           // cars along 
     const x0 = V() * MW, sp = (.3 + V() * .2) * (V.p(.5) ? 1 : -1);
     vig(x0, ROAD[0] - .5, pics, { tick: e => { e.x = ((x0 + T * sp) % MW + MW) % MW; e.cur = pics[(sp < 0 ? 0 : 2) + Math.floor(T * 3 + x0) % 2]; } });
   }
-  for (const [x, y, habit] of [[44.8, 90.9, 'fan'], [53.2, 90.9, 'fan'], [44.2, 88.8, 'read']]) {   // the sellers
-    const L = look('woman');
+  for (const [x0, y0, habit] of [[44.8, 90.9, 'fan'], [53.2, 90.9, 'fan'], [44.2, 88.8, 'read']]) {   // the sellers
+    const L = look('woman'), [x, y] = o(x0, y0);
     vig(x, y, [seated(L, habit, false), seated(L, habit + '2', false)], { win: jit([300, 1260], 30), seq: [[0, 3 + V() * 3], [1, .7]] });
   }
 }
@@ -992,7 +1009,7 @@ addEventListener('resize', resize);
     s.ecv = s.eg = s.g = null;
   }
   pilgrims(); worshippers(); sweepers(); bellRinger(); candles(); birds(); streetLife();
-  resize(); camX = sx(CX, CY) - vw / 2 + Math.min(140, vw * .12); camY = sy(CX, CY + 12, 120) - vh / 2; clampCam();   // the stupa, with the south stairway to its right
+  resize(); camX = sx(CX, CY + 10) - vw / 2 + Math.min(80, vw * .08); camY = sy(CX, CY + 16, PZ + 30) - vh / 2; clampCam();   // the stupa, with the south stairway to its right
   document.getElementById('load').remove();
   tick(); setInterval(tick, 1000);
   requestAnimationFrame(loop);

@@ -157,13 +157,27 @@ function arches(g, e, f, z, h, trim, dark, lit = .4) {   // arched windows, one 
     if (e && chance(lit)) fr(e, f, u + 4 / 12, u + 8 / 12, z + 2, z + h - 2, pick(LIT));
   }
 }
-function pyatthat(g, cx, cy, z, r, n, col) {             // Burmese tiered roof
-  for (let i = 0; i < n; i++) {
-    const rr = q12(r * (1 - i / (n + .6))), nk = q12(rr * .55);
-    box(g, cx - rr, cy - rr, cx + rr, cy + rr, z, z + 3, col, sh(col, 1.3));
-    box(g, cx - nk, cy - nk, cx + nk, cy + nk, z + 3, z + 5, '#EFE3C2'); z += 5;
+const TRIM = '#E3B23C';
+function roofTier(g, cx, cy, z, rx, ry, h, col) {         // one hipped roof: gold eave, sloping sides, upturned corners
+  box(g, cx - rx, cy - ry, cx + rx, cy + ry, z, z + 1, TRIM, TRIM);
+  const m = Math.max(2, h - 1);
+  for (let k = 0; k < m; k++) {
+    const t = (k + 1) / m, ax = q12(Math.max(.04, rx * (1 - .64 * t))), ay = q12(Math.max(.04, ry * (1 - .64 * t)));
+    box(g, cx - ax, cy - ay, cx + ax, cy + ay, z + 1 + k, z + 2 + k, col, sh(col, 1.18));
   }
-  lathe(g, cx, cy, z, 14, t => .28 * (1 - t / 14) + .03, GOLD, GOLD[0]);
+  g.fillStyle = TRIM;                                               // the four corners curl up
+  for (const [x, y, dx] of [[cx - rx, cy - ry, -1], [cx + rx, cy + ry, 0], [cx - rx, cy + ry, 0], [cx + rx, cy - ry, 0]]) g.fillRect(sx(x, y) + dx, sy(x, y, z + 1) - 2, 1, 2);
+}
+function pyatthat(g, cx, cy, z, r, n, col) {              // Burmese pyatthat: an odd number of ever-narrower roofs, a neck between each, a gold spire
+  n |= 1;
+  const th = Math.max(4, Math.round(3 + r * 5));
+  for (let i = 0; i < n; i++) {
+    const rr = q12(Math.max(.1, r * Math.pow(.74, i))), nk = q12(Math.max(.06, rr * .42));
+    roofTier(g, cx, cy, z, rr, rr, th, col); z += th + 1;
+    box(g, cx - nk, cy - nk, cx + nk, cy + nk, z - 1, z + 2, '#EFE3C2', '#F6EBD0'); z += 2;
+  }
+  const H = Math.round(10 + r * 12);                              // the spire, with a little hti ring
+  lathe(g, cx, cy, z, H, t => (Math.abs(t / H - .45) < .06 ? .16 : .13 * Math.pow(1 - t / H, 1.2)) + .02, GOLD, GOLD[0]);
 }
 function blob(g, X, Y, rx, ry, pal) {       // shaded, speckled ball lit from the upper left
   const n = pal.length;
@@ -552,16 +566,16 @@ function smallStupa(x, y, z, k) {
   lathe(e, x, y, z, Math.round(26 * sc), prof, GOLDN, GOLDN[0]);
 }
 function shrine(x, y, z) {
-  const s = spr(x - .3, y - .3, x + .3, y + .3, z + 30, 3), g = s.g, e = glow(s);
+  const s = spr(x - .3, y - .3, x + .3, y + .3, z + 50, 4), g = s.g, e = glow(s);
   box(g, x - .3, y - .3, x + .3, y + .3, z, z + 9, '#F2ECDF');
   const f = { w: 0, k: y + .3 }; fr(g, f, x - .13, x + .13, z + 1, z + 7, '#3B2A22'); fr(g, f, x - .05, x + .05, z + 2, z + 5, '#E8B83A');
   fr(e, f, x - .13, x + .13, z + 1, z + 7, '#FFD27A');
-  pyatthat(g, x, y, z + 9, .42, 2, V.pick(['#B8862A', '#8E2F24']));
+  pyatthat(g, x, y, z + 9, .42, 3, V.pick(['#B8862A', '#8E2F24']));
 }
 const HALLC = [['#F3EDE1', '#8E2F24'], ['#F3EDE1', '#B8862A'], ['#E9D9B5', '#8E2F24'], ['#C9473A', '#D9A93A'], ['#F3EDE1', '#3E5F55']];
 function hall(x0, y0, x1, y1) {
-  const long = Math.max(x1 - x0, y1 - y0) > 12, h = long ? 9 : 10 + V.i(0, 1) * 4;
-  const s = spr(x0, y0, x1, y1, PZ + h + 40, 4), g = s.g, e = glow(s), [wall, roof] = V.pick(HALLC);
+  const long = Math.max(x1 - x0, y1 - y0) > 12, h = long ? 9 : 8 + V.i(0, 1) * 2;
+  const s = spr(x0, y0, x1, y1, PZ + h + 110, 4), g = s.g, e = glow(s), [wall, roof] = V.pick(HALLC);
   if (long) {                                                     // a covered walkway: pillars and a long roof
     for (const f of faces(x0, y0, x1, y1)) for (let u = f.a; u < f.b; u += 1) fr(g, f, u, u + .17, PZ, PZ + h, sh('#C9473A', f.s));
     for (let v = y0; v < y1; v += 2) box(g, x0, v, x1, Math.min(y1, v + 1.5), PZ + h, PZ + h + 2, '#8E6A4A', '#A5825E');   // slatted, so it doesn't swamp the view
@@ -576,13 +590,13 @@ function hall(x0, y0, x1, y1) {
     }
     fr(g, f, f.a, f.b, PZ + h - 2, PZ + h, sh('#D9A93A', f.s));
   }
-  const n = Math.min(4, 1 + Math.floor(Math.min(x1 - x0, y1 - y0) / 1.5)), cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+  // a low hipped roof over the hall (two layers on big ones), then a pyatthat rising from the middle
+  const w = x1 - x0, d = y1 - y0, m = Math.min(w, d), cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
   let z = PZ + h;
-  for (let i = 0; i < n; i++) {                                   // tiered roof
-    const rx = q12((x1 - x0) / 2 * (1 - i / (n + 1)) + .15), ry = q12((y1 - y0) / 2 * (1 - i / (n + 1)) + .15);
-    box(g, cx - rx, cy - ry, cx + rx, cy + ry, z, z + 3, roof, sh(roof, 1.3)); z += 4;
-  }
-  lathe(g, cx, cy, z, 10, t => .22 * (1 - t / 10) + .03, GOLD, GOLD[0]);
+  roofTier(g, cx, cy, z, q12(w / 2 + .15), q12(d / 2 + .15), 5, roof); z += 5;
+  if (m > 3) { roofTier(g, cx, cy, z, q12(w / 2 * .72), q12(d / 2 * .72), 4, roof); z += 4; }
+  const r = q12(Math.max(.4, Math.min(1.3, m * .28))), n = m < 2 ? 3 : m < 4 ? 5 : 7;
+  pyatthat(g, cx, cy, z, r, n, roof);
   return s;
 }
 const ANIMAL = {                                                   // tiny pixel animals for the planetary posts
@@ -602,7 +616,7 @@ function post([day, x, y, animal]) {                              // a small Bud
   void day; void e;
 }
 function bellPavilion(x, y) {
-  const s = spr(x - 1, y - 1, x + 1, y + 1, PZ + 60, 4), g = s.g;
+  const s = spr(x - 1, y - 1, x + 1, y + 1, PZ + 110, 4), g = s.g;
   g.fillStyle = '#8E2F24';
   for (const [u, v] of [[x - .9, y + .9], [x + .9, y + .9], [x - .9, y - .9], [x + .9, y - .9]]) g.fillRect(sx(u, v), sy(u, v, PZ) - 24, 1, 24);
   lathe(g, x, y, PZ + 4, 18, t => .25 + .55 * Math.pow(1 - t / 18, 1.6), ['#C9A060', '#A88048', '#8A6A3A', '#6E522C', '#55401F'], '#B8904E');   // the bronze bell
@@ -641,7 +655,7 @@ function stairway() {
     box(g, x0 - .15, a, x1 + .15, b, rz, rz + 3, '#B8862A', '#D9A93A');
     box(g, x0 + .4, a + .2, x1 - .4, b - .2, rz + 3, rz + 6, '#8E2F24', '#A8342A');
   }
-  const gate = spr(x0 - .8, y1 - .6, x1 + .8, y1 + .4, 90, 4), gg = gate.g;   // the gateway at the foot
+  const gate = spr(x0 - .8, y1 - .6, x1 + .8, y1 + .4, 130, 4), gg = gate.g;   // the gateway at the foot
   box(gg, x0 - .8, y1 - .6, x0 - .2, y1 + .4, 0, 26, '#F2ECDF'); box(gg, x1 + .2, y1 - .6, x1 + .8, y1 + .4, 0, 26, '#F2ECDF');
   box(gg, x0 - .8, y1 - .6, x1 + .8, y1 + .4, 26, 30, '#D9A93A');
   pyatthat(gg, (x0 + x1) / 2, y1 - .1, 30, 1.6, 5, '#8E2F24');

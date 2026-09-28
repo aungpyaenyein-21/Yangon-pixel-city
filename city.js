@@ -213,9 +213,9 @@ const rbd = (x, y) => Math.hypot(x + .5 - CX, y + .5 - CY);
 function mark(x0, y0, x1, y1, h) { for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) if (x >= 0 && y >= 0 && x < MW && y < MH) HT[y * MW + x] = h; }
 // can the camera see a figure h px tall standing at (x, y)? walk the sight line towards the south-west
 function seen(x, y, h = 10) {
-  for (let t = .5; t < 30; t += .5) {
-    const tx = Math.floor(x - t), ty = Math.floor(y + t);
-    if (tx < 0 || ty >= MH) return true;
+  for (const o of [-.35, 0, .35]) for (let t = .5; t < 30; t += .5) {    // three sight lines ≈ a figure's width
+    const tx = Math.floor(x + o - t), ty = Math.floor(y + o + t);
+    if (tx < 0 || ty >= MH) break;
     if (HT[ty * MW + tx] > 12 * t + 1 + h / 2) return false;
   }
   return true;
@@ -847,6 +847,16 @@ function props() {
   for (let y = 50; y < 124; y += 5) if (at(125, y) === WALK && free1(125, y)) stall(125, y);   // Pansodan book stalls
   for (const [x, y, ax] of [[28, 83, 1], [110, 83, 1], [40, 43, 1], [64, 58, 0], [64, 112, 0]]) if (free1(x, y)) busStop(x, y, ax);
   for (let n = 0; n < 12; n++) { const x = 70.5 + rnd() * 27, y = 106.2; if (at(x | 0, 106) === GRASS) bench(q12(x), 106); }
+  const quiet = [];                                       // chinlone: quiet streets without through traffic
+  for (const [x0, x1, y0, y1] of NS) if (x1 - x0 === 2 && y1 < 148) for (let y = y0 + 3; y < y1 - 3; y++) quiet.push([x0 + 1, y + .5]);
+  for (const [y0, y1, x0, x1, m] of EW) if (!m) for (let x = x0 + 3; x < x1 - 3; x++) quiet.push([x + .5, y0 + 1]);
+  const courts = [];
+  for (let n = 0; n < 3000 && courts.length < 2; n++) {
+    const [x, y] = V.pick(quiet);
+    if (!seen(x, y, 14) || courts.some(([a, b]) => Math.hypot(a - x, b - y) < 30) || rbd(x, y) < 12) continue;
+    courts.push([x, y]); for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) used.add(((x + dx) | 0) + ',' + ((y + dy) | 0));
+    chinlone(x, y);
+  }
   parked(54.3, 58, 'N', 'fire');
   for (const [x0, x1, y0, y1] of NS) if (x1 - x0 === 2) for (let y = y0 + 2; y < y1 - 1; y += 1.5) {
     if (at(x0 - 1, y | 0) === WALK && at(x0 - 1, (y + 1) | 0) === WALK && chance(.35) && free1(x0, y)) parked(x0 + .4, y + .5, chance(.5) ? 'N' : 'S');
@@ -990,6 +1000,30 @@ function seated(L, pose, back) {                       // 7×11, feet on the gro
     else { armL(); armR(); }
   }), 3, 10);
 }
+function standing(L, pose, back) {                     // 7×15, feet on the ground at row 14
+  return anchor(pix(7, 15, P => {
+    const bend = pose === 'bend' || pose === 'bend2', low = L.tuck ? 2 : 4;   // chinlone players tuck their longyi up
+    if (bend) { head(P, L, 3, 5, back); P(2, 8, 4, 2, L.shirt); P(2, 10, 3, 3, L.low); P(5, 10, 1, 1, L.skin); if (pose === 'bend2') P(4, 8, 3, 2, L.book); }
+    else { head(P, L, 2, 3, back); P(2, 6, 3, 3, L.shirt); P(2, 9, 3, low, L.low); P(3, 10, 1, 1, sh(L.low, .72)); }
+    const down = x => { P(x, 6, 1, 2, L.shirt); P(x, 8, 1, 1, L.skin); };
+    if (bend) { /* hands are on the books */ }
+    else if (pose === 'wave') { down(1); P(5, 5, 1, 2, L.shirt); P(6, 4, 1, 1, L.skin); P(6, 3, 1, 1, '#7BB661'); }       // waving a wad of notes
+    else if (pose === 'up') { P(1, 1, 1, 1, L.skin); P(1, 2, 1, 4, L.shirt); P(5, 1, 1, 1, L.skin); P(5, 2, 1, 4, L.shirt); }
+    else if (pose === 'side') { P(0, 6, 2, 1, L.shirt); P(5, 6, 2, 1, L.shirt); P(0, 5, 1, 1, L.skin); P(6, 5, 1, 1, L.skin); }
+    else if (pose === 'kick') { P(0, 6, 2, 1, L.shirt); P(5, 6, 1, 2, L.shirt); P(5, 8, 1, 1, L.skin); }
+    else if (pose === 'rod') { down(1); P(5, 6, 1, 1, L.shirt); P(5, 7, 2, 1, L.skin); }
+    else if (pose === 'run1' || pose === 'run2') { const f = pose === 'run1'; P(f ? 1 : 5, 5, 1, 2, L.shirt); P(f ? 5 : 1, 7, 1, 2, L.shirt); }
+    else if (pose === 'throw') { down(1); P(5, 6, 2, 1, L.shirt); P(6, 7, 1, 1, L.skin); P(6, 9, 1, 1, '#E8D6A0'); P(5, 11, 1, 1, '#E8D6A0'); }
+    else { down(1); down(5); }
+    const leg = (x, y0) => { P(x, y0, 1, 14 - y0, L.skin); P(x, 14, 1, 1, SHOE); }, top = 9 + low;
+    if (pose === 'kick') { leg(2, top); P(4, 11, 1, 1, L.skin); P(5, 10, 1, 1, L.skin); P(6, 9, 1, 1, SHOE); }   // sole up behind, the chinlone way
+    else if (pose === 'walk2' || pose === 'run2') leg(3, top);
+    else if (pose === 'run1') { leg(1, top); leg(5, top); }
+    else { leg(2, top); leg(4, top); }
+  }), 3, 14);
+}
+const lower = (c, n = 1) => anchor(c, c.ax, c.ay - n);  // same picture, drawn n px lower (a small bob)
+const dup = c => { const d = mk(c.width, c.height); d.getContext('2d').drawImage(c, 0, 0); return anchor(d, c.ax, c.ay); };
 function kid(L, pose) {                                // 5×11 child / tea-shop boy, feet at row 10
   return anchor(pix(7, 11, P => {
     head(P, L, 1, 0, false);
@@ -1041,6 +1075,32 @@ function teaVig(x, y, door) {
     e.x = home[0] + (tb[0] - home[0]) * u; e.y = home[1] + (tb[1] - home[1]) * u;
     e.cur = u > 0 && u < 1 ? f[1 + (Math.floor(T * 3) % 2)] : f[0];
   } });
+}
+
+// chinlone: a ring of players keeping the cane ball in the air, late afternoon, on a quiet street
+const hash = k => { const v = Math.sin(k * 12.9898 + 78.233) * 43758.5453; return v - Math.floor(v); };
+const BALL = anchor(pix(3, 3, P => { P(1, 0, 1, 3, '#E8C547'); P(0, 1, 3, 1, '#E8C547'); P(2, 2, 1, 1, '#B8902A'); P(1, 1, 1, 1, '#B8902A'); }), 1, 2);
+const BALLSHADOW = anchor(pix(3, 1, P => P(0, 0, 3, 1, 'rgba(0,0,0,.35)')), 1, 0);
+function chinlone(cx, cy) {
+  const n = 5, win = jit([960, 1110], 20), pos = [], D = 1.15, ph = V() * 50;
+  for (let i = 0; i < n; i++) {
+    const a = i / n * 2 * Math.PI + .4, x = cx + .55 * Math.cos(a), y = cy + .55 * Math.sin(a);
+    const back = !(Math.cos(a) > .2 || Math.sin(a) < -.2);          // everyone faces the middle
+    const L = look('man'); L.tuck = 1;
+    const idle = standing(L, 'idle', back), pics = [idle, lower(dup(idle)), standing(L, 'kick', back)];
+    pos.push([x, y]);
+    vig(x, y, pics, { win, tick: e => {
+      const k = Math.floor((T + ph) / D), u = (T + ph) / D - k, from = Math.floor(hash(k) * n), to = Math.floor(hash(k + 1) * n);
+      e.cur = (from === i && u < .2) || (to === i && u > .82) ? pics[2] : pics[Math.floor(T * 1.4 + i * .7) % 2];
+    } });
+  }
+  const fly = (e, lift) => {                                      // the ball arcs from one player to the next
+    const k = Math.floor((T + ph) / D), u = (T + ph) / D - k, a = Math.floor(hash(k) * n), b = Math.floor(hash(k + 1) * n);
+    e.x = pos[a][0] + (pos[b][0] - pos[a][0]) * u; e.y = pos[a][1] + (pos[b][1] - pos[a][1]) * u;
+    e.z = lift ? 9 + (a === b ? 12 : 22 + hash(k + .5) * 10) * 4 * u * (1 - u) : 1;
+  };
+  vig(cx, cy, [BALLSHADOW], { win, d: -.05, tick: e => fly(e, false) });
+  vig(cx, cy, [BALL], { win, z: 0, tick: e => fly(e, true) });
 }
 
 // ── time of day (Yangon time; ?t=18:30 to preview another hour) ─────────────

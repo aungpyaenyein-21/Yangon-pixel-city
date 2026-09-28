@@ -844,7 +844,7 @@ function props() {
     const x = ri(0, MW - 1), y = ri(0, 151), d = Math.hypot(x - CX, y - CY);
     if (at(x, y) === WALK && d > 10 && rnd() < 40 / (d + 20) && free1(x, y)) (chance(.3) ? teaShop : stall)(x, y);
   }
-  for (let y = 50; y < 124; y += 5) if (at(125, y) === WALK && free1(125, y)) stall(125, y);   // Pansodan book stalls
+  for (let y = 49; y < 126; y++) if (at(130, y) === WALK && at(131, y) === LOT && free1(130, y)) bookSpot(130, y);   // Pansodan booksellers (east sidewalk: the west one is hidden from this camera)
   for (const [x, y, ax] of [[28, 83, 1], [110, 83, 1], [40, 43, 1], [64, 58, 0], [64, 112, 0]]) if (free1(x, y)) busStop(x, y, ax);
   for (let n = 0; n < 12; n++) { const x = 70.5 + rnd() * 27, y = 106.2; if (at(x | 0, 106) === GRASS) bench(q12(x), 106); }
   const quiet = [];                                       // chinlone: quiet streets without through traffic
@@ -932,7 +932,7 @@ function populate() {
     if (x0 === 65) { lane([[66, -1], ...arc(98.5, 261.5), [66, 149], [-1, 149]], 2.2); lane([[-1, 151], [68, 151], ...arc(278.5, 441.5), [68, -1]], 2.2); }
     else if (m) { lane([[x0 + 1, -1], [x0 + 1, 149], [-1, 149]], 2.2); lane([[-1, 151], [x0 + 3, 151], [x0 + 3, -1]], 2.2); }
     else if (y1 >= 148) { const x = x0 + 1; lane(alt++ % 2 ? [[-1, 151], [x, 151], [x, -1]] : [[x, -1], [x, 149], [-1, 149]], 1.1, true); }
-    walkers(x0 - .5, y0, x0 - .5, y1); walkers(x1 + .5, y0, x1 + .5, y1);
+    walkers(x0 - .5, y0, x0 - .5, y1); walkers(x1 + (x0 === 126 ? .2 : .5), y0, x1 + (x0 === 126 ? .2 : .5), y1);   // Pansodan: keep off the books
   }
   walkers(84.5, 89, 84.5, 117, 6); walkers(70, 107.5, 99, 107.5, 6); walkers(0, 153.5, 120, 153.5, 7);
   const ring = { ring: 1, len: 2 * Math.PI * 9.1 };
@@ -1101,6 +1101,32 @@ function chinlone(cx, cy) {
   };
   vig(cx, cy, [BALLSHADOW], { win, d: -.05, tick: e => fly(e, false) });
   vig(cx, cy, [BALL], { win, z: 0, tick: e => fly(e, true) });
+}
+
+// Pansodan booksellers: books laid out on the pavement and leaned on the wall, browsers bent over them
+const BOOKC = ['#8E2B2B', '#2B4F8E', '#E8C547', '#3D7A4A', '#E8E4DA', '#6B3E6B', '#D9772B', '#2B2B2B', '#B8A07A', '#5A8FA8'];
+const bookMat = () => thing(-.17, -.42, .17, .42, 16, 2, g => {
+  tF(g, -.17, -.42, .17, .42, 1, V.pick(['#3E5C7A', '#6B4A2E', '#7A7A72']));
+  for (let v = -.38; v < .38; v += 2 / 12) for (let u = -.13; u < .12; u += 1.5 / 12) {
+    if (V.p(.85)) { g.fillStyle = V.pick(BOOKC); g.fillRect(sx(u, v), sy(u, v, 2), 2, 1); }
+  }
+  for (let k = V.i(0, 2); k > 0; k--) { const v = -.3 + V() * .5; box(g, -.1, v, .02, v + .15, 1, 1 + V.i(2, 5), V.pick(BOOKC)); }
+  wF(g, .17, -.4, .4, 1, 13, '#8B6A48');                         // a board against the wall, spines out
+  for (let v = -.36; v < .36; v += 1 / 12) wF(g, .17, v, v + 1 / 12, 3, V.i(7, 11), V.pick(BOOKC));
+});
+function bookSpot(x, y) {
+  if (!seen(x + .6, y + .5, 8)) return;
+  const win = jit([480, 1080], 35);                              // laid out one by one from 8:00, packed away by 18:00
+  if (V.p(.8)) vig(x + .6, y + .5, [bookMat()], { z: 0, win });
+  else {                                                          // the seller, or an old man with a book, on a stool
+    const L = look(V.p(.4) ? 'old' : 'man'), habit = V.p(.5) ? ['fan', 'fan2'] : ['read', 'read2'];
+    vig(x + .6, y + .5, [stool(V.pick(STOOLS))], { z: 0, d: -.02, win });
+    vig(x + .6, y + .5, habit.map(p => seated(L, p, false)), { win, seq: [[0, 3 + V() * 4], [1, .7 + V() * .6]] });
+  }
+  if (V.p(.3)) {                                                  // someone browsing, for a while
+    const L = look(), a = 540 + V() * 460;
+    vig(x + .22, y + .5, [standing(L, 'bend', true), standing(L, 'bend2', true)], { win: [a, a + 40 + V() * 120], seq: [[0, 3 + V() * 3], [1, 2 + V() * 3]] });
+  }
 }
 
 // ── time of day (Yangon time; ?t=18:30 to preview another hour) ─────────────

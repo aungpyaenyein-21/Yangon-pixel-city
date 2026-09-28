@@ -165,6 +165,7 @@ const SHOPS = [   // Burmese, English, sign colour, text colour
   ['နာရီ', 'WATCH', '#37474F', '#FFFFFF'], ['ပုံနှိပ်', 'PRINT', '#00897B', '#FFFFFF'],
   ['ဘီယာ', 'BEER', '#FFB300', '#1B1B1B'], ['အကြော်', 'FRITTERS', '#E64A19', '#FFFFFF'],
   ['လက်ဖက်ရည်', 'TEA', '#1B5E20', '#FFFFFF'], ['ငွေလဲ', 'EXCHANGE', '#B71C1C', '#FFFFFF'],
+  ['ဘဏ်', 'BANK', '#0D47A1', '#FFFFFF'], ['ပြခန်း', 'GALLERY', '#263238', '#FFD54F'], ['ရုံး', 'OFFICE', '#F2EFE6', '#37474F'],
 ];
 const BILLS = [
   ['မင်္ဂလာပါ', 'MINGALARBAR', '#D32F2F', '#FFFFFF'], ['ရန်ကုန်', 'YANGON', '#1E4FA0', '#FFE14D'],
@@ -340,11 +341,39 @@ function roofStuff(g, x0, y0, x1, y1, H) {
     box(g, a, b, a + .33, b + .25, H, H + 4, '#D9D9D4'); wF(g, a, b + .04, b + .21, H + 1, H + 3, '#6E6E6A');
   }
 }
-function shopSign(maxW) {
-  for (let i = 0; i < 8; i++) {
-    const [my, en, bg, fg] = pick(SHOPS);
-    let t = signTex(my, en, bg, fg); if (t.width <= maxW) return [t, en];
-    t = signTex(my, null, bg, fg); if (t.width <= maxW) return [t, en];
+// what a street sells: each street has its own mix, and neighbours never repeat a sign
+const SR = rng(4242), signUse = {}, lastOn = {};
+const INDIAN = ['BIRYANI', 'PARATHA', 'BETEL', 'RICE', 'TEA', 'LONGYI', 'GOLD'];
+const TRADE = {
+  'SHWE BON THAR RD': ['GOLD', 'GOLD', 'LONGYI', 'WATCH', 'TEA', 'PHARMACY'],
+  'SULE PAGODA RD': ['EXCHANGE', 'MOBILE', 'OPTICAL', 'WATCH', 'HOTEL', 'PHARMACY', 'COFFEE', 'TEA'],
+  'PANSODAN ST': ['BOOKS', 'BOOKS', 'PRINT', 'TEA', 'COFFEE', 'OPTICAL', 'GALLERY', 'BANK', 'OFFICE'],
+  'BOGYOKE AUNG SAN RD': ['LONGYI', 'SHOES', 'GOLD', 'WATCH', 'TEA', 'MOBILE'],
+  'ANAWRAHTA RD': ['MOBILE', 'PHARMACY', 'SHOES', 'RICE', 'TEA', 'BIRYANI', 'STORE'],
+  'MERCHANT RD': ['STORE', 'RICE', 'BEER', 'PRINT', 'TEA', 'FRITTERS'],
+  'STRAND RD': ['STORE', 'BEER', 'RICE', 'HOTEL', 'FRITTERS', 'TEA'],
+  '29TH ST': INDIAN, '30TH ST': INDIAN, '31ST ST': INDIAN, 'BO SOON PAT ST': INDIAN,
+  '32ND ST': ['TEA', 'BIRYANI', 'MOBILE', 'BETEL', 'RICE', 'MOHINGA'],
+  'MB WEST': ['PARATHA', 'BIRYANI', 'GOLD', 'TEA', 'BETEL', 'MOHINGA'],
+  'MB EAST': ['PHARMACY', 'EXCHANGE', 'OPTICAL', 'COFFEE', 'MOBILE', 'TEA'],
+};
+const ALLTRADE = [...new Set(SHOPS.map(s => s[1]))];
+function streetOf(f) {                                            // the street a wall looks onto
+  const r = f.w ? NS.find(r => r[1] === f.k - 1 && r[2] <= f.a && r[3] >= f.b) : EW.find(r => r[0] === f.k + 1 && r[2] <= f.a && r[3] >= f.b);
+  if (!r) return null;
+  return r[6] === 'MAHA BANDULA RD' ? (f.a < CX ? 'MB WEST' : 'MB EAST') : r[6];
+}
+function shopSign(maxW, f) {
+  const key = (f.w ? 'w' : 's') + f.k, prev = lastOn[key], mid = (f.a + f.b) / 2;
+  let list = (TRADE[streetOf(f)] || ALLTRADE).filter(en => !(prev && prev[0] === en && Math.abs(prev[1] - mid) < 6));
+  for (let i = 0; i < 8 && list.length; i++) {
+    const w = list.map(en => 1 / (1 + (signUse[en] || 0) * .6)), tot = w.reduce((a, b) => a + b, 0);   // rarer signs get picked more
+    let r = SR() * tot, j = 0; while (r > w[j]) r -= w[j++];
+    const en = list[j], [my, , bg, fg] = SR.pick(SHOPS.filter(s => s[1] === en));
+    for (const t of [signTex(my, en, bg, fg), signTex(my, en, bg, fg, 10), signTex(my, null, bg, fg, 10)]) {
+      if (t.width <= maxW) { signUse[en] = (signUse[en] || 0) + 1; lastOn[key] = [en, mid]; return [t, en]; }
+    }
+    list = list.filter(e => e !== en);
   }
   return [null];
 }
@@ -397,7 +426,7 @@ function shop(x0, y0, x1, y1, fl, stW, stS, main) {
     fr(g, f, f.a, f.b, H - 2, H, sh(col, f.s * 1.08));
     streaks(g, f, H);
     if (street && chance(.8)) {
-      const [t, en] = shopSign((f.b - f.a) * 12 - 2);
+      const [t, en] = shopSign((f.b - f.a) * 12 - 2, f);
       if (t) { signOn(g, e, f, 13, t); if (en === 'TEA') teaSpots.push(f.w ? [f.k - 1, Math.floor((f.a + f.b) / 2), 'E'] : [Math.floor((f.a + f.b) / 2), f.k, 'N']); }
     }
   }
@@ -808,9 +837,10 @@ function building(x0, y0, x1, y1) {
   const stW = at(x0 - 1, my) === WALK, stS = at(mx, y1) === WALK;
   const main = nearMain(x0 - 2, my) || nearMain(mx, y1 + 1) || nearMain(x1 + 1, my) || nearMain(mx, y0 - 2);
   if (x0 >= 119 || (y0 >= 131 && x0 >= 69)) {
-    const t = chance(.4) ? pick([['ဘဏ်', 'BANK', '#0D47A1', '#FFFFFF'], ['စာအုပ်', 'BOOKS', '#F2EFE6', '#1A3C8C'], ['ပြခန်း', 'GALLERY', '#263238', '#FFD54F'], ['ရုံး', 'OFFICE', '#F2EFE6', '#37474F']]) : null;
-    const sg = t && stW ? { f: 'w', t: signTex(...t) } : t && stS ? { f: 's', t: signTex(...t) } : null;
-    return colonial(x0, y0, x1, y1, ri(3, 4), undefined, sg && (sg.t.width <= ((sg.f === 'w' ? y1 - y0 : x1 - x0) * 12)) ? sg : null, stW, stS);
+    const f = stW ? faces(x0, y0, x1, y1)[0] : stS ? faces(x0, y0, x1, y1)[1] : null;
+    let sg = null;
+    if (f && chance(.4)) { const [t] = shopSign((f.b - f.a) * 12 - 2, f); if (t) sg = { f: f.w ? 'w' : 's', t }; }
+    return colonial(x0, y0, x1, y1, ri(3, 4), undefined, sg, stW, stS);
   }
   let fl = ri(2, 5) + (main ? ri(1, 2) : 0);
   if (main && chance(.05)) fl = ri(9, 12);

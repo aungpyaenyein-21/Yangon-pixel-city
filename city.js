@@ -212,11 +212,11 @@ const at = (x, y) => (x < 0 || y < 0 || x >= MW || y >= MH ? -1 : G[y * MW + x])
 const rbd = (x, y) => Math.hypot(x + .5 - CX, y + .5 - CY);
 function mark(x0, y0, x1, y1, h) { for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) if (x >= 0 && y >= 0 && x < MW && y < MH) HT[y * MW + x] = h; }
 // can the camera see a figure h px tall standing at (x, y)? walk the sight line towards the south-west
-function seen(x, y, h = 10) {
+function seen(x, y, h = 10, z = 1) {
   for (const o of [-.35, 0, .35]) for (let t = .5; t < 30; t += .5) {    // three sight lines ≈ a figure's width
     const tx = Math.floor(x + o - t), ty = Math.floor(y + o + t);
     if (tx < 0 || ty >= MH) break;
-    if (HT[ty * MW + tx] > 12 * t + 1 + h / 2) return false;
+    if (HT[ty * MW + tx] > 12 * t + z + h / 2) return false;
   }
   return true;
 }
@@ -300,7 +300,7 @@ function ground(g) {
 }
 
 // ── buildings ────────────────────────────────────────────────────────────────
-const teaSpots = [];
+const teaSpots = [], upper = [];
 function arches(g, e, f, z, h, trim, dark, lit = .4) {   // arched windows, one per tile
   for (let u = f.a; u < f.b - .5; u++) {
     fr(g, f, u + 3 / 12, u + 9 / 12, z + 2, z + h, sh(trim, f.s));
@@ -331,6 +331,14 @@ function roofStuff(g, x0, y0, x1, y1, H) {
   }
   if (chance(.25) && x1 - x0 > 1.5 && y1 - y0 > 1.5) box(g, x0 + .25, y0 + .25, x0 + 1.25, y0 + 1.25, H, H + 8, '#CFC9BB');
   if (chance(.3)) { g.fillStyle = '#4A4A4A'; g.fillRect(sx(x1 - .4, y0 + .4), sy(x1 - .4, y0 + .4, H) - 15, 1, 15); }
+  if (V.p(.45)) {                                              // satellite dish
+    const X = sx(x0 + .3 + V() * (x1 - x0 - .6), y0 + .3 + V() * (y1 - y0 - .6)), Y = sy(x0 + .5, y0 + .5, H) + Math.round((V() - .5) * 6);
+    g.fillStyle = '#5A5A5A'; g.fillRect(X, Y - 4, 1, 4); g.fillStyle = '#E8E8E4'; g.fillRect(X - 2, Y - 7, 4, 2); g.fillRect(X - 1, Y - 8, 3, 1); g.fillStyle = '#BDBDB8'; g.fillRect(X - 2, Y - 5, 4, 1);
+  }
+  for (let n = V.i(0, 2); n > 0; n--) {                        // air-con outdoor units
+    const a = q12(x0 + .15 + V() * (x1 - x0 - .6)), b = q12(y0 + .15 + V() * (y1 - y0 - .5));
+    box(g, a, b, a + .33, b + .25, H, H + 4, '#D9D9D4'); wF(g, a, b + .04, b + .21, H + 1, H + 3, '#6E6E6A');
+  }
 }
 function shopSign(maxW) {
   for (let i = 0; i < 8; i++) {
@@ -357,6 +365,7 @@ function billboard(g, e, x0, y0, x1, y1, H) {
 function shop(x0, y0, x1, y1, fl, stW, stS, main) {
   const H = 14 + (fl - 1) * FL + 2, s = spr(x0, y0, x1, y1, H + 40), g = s.g, e = glow(s);
   mark(x0, y0, x1, y1, H);
+  if (stW && fl >= 3) upper.push({ x0, y0, y1, fl });
   const col = pick(WALLS), win = pick(WIN), bal = chance(.35), grille = chance(.5);
   box(g, x0, y0, x1, y1, 0, H, col, '#A7A194');
   tF(g, x0 + 1 / 6, y0 + 1 / 6, x1 - 1 / 6, y1 - 1 / 6, H, '#948E82');
@@ -859,6 +868,7 @@ function props() {
     courts.push([x, y]); for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) used.add(((x + dx) | 0) + ',' + ((y + dy) | 0));
     chinlone(x, y);
   }
+  wiring();
   parked(54.3, 58, 'N', 'fire');
   for (const [x0, x1, y0, y1] of NS) if (x1 - x0 === 2) for (let y = y0 + 2; y < y1 - 1; y += 1.5) {
     if (at(x0 - 1, y | 0) === WALK && at(x0 - 1, (y + 1) | 0) === WALK && chance(.35) && free1(x0, y)) parked(x0 + .4, y + .5, chance(.5) ? 'N' : 'S');
@@ -1220,6 +1230,64 @@ function parkLife() {
   });
 }
 
+// upper floors: laundry on bamboo poles, and the rope basket that comes down to the street now and then
+function laundry() {
+  const cloth = [0, 1, 2].map(() => [V.pick(GOODS), V.i(3, 4)]);
+  return [0, 1].map(f => anchor(pix(13, 12, P => {
+    for (let i = 0; i <= 12; i++) P(12 - i, i >> 1, 1, 1, '#9C7A4E');
+    cloth.forEach(([c, h], j) => { const x = 9 - j * 4, y = (12 - x) >> 1; P(x, y + 1, 2, h - 1, c); P(x + ((f + j) % 2 ? 1 : -1) * (j === 1 ? 0 : 1), y + h, 2, 1, sh(c, .8)); });
+  }), 6, 3));
+}
+function upperLife() {
+  const faces2 = upper.filter(() => V.p(.35));
+  for (const u of faces2) {
+    const y = u.y0 + V.i(0, u.y1 - u.y0 - 1) + .5, k = V.i(2, u.fl - 1), z = 14 + (k - 1) * FL;
+    if (V.p(.6)) {
+      if (seen(u.x0 - .5, y, 8, z + 6)) vig(u.x0 - .5, y, laundry(), { z: z + 8, seq: [[0, .9 + V() * .8], [1, .9 + V() * .8]] });
+    } else if (seen(u.x0 - .4, y, 12)) {                            // the rope basket
+      const zw = z + 3, P = 70 + V() * 90, ph = V() * P, x = u.x0 - .12;
+      const phase = () => (T + ph) % P;
+      vig(x, y, [], { z: 0, draw: (e, px, py) => {
+        const t = phase(), s = t < 8 ? t / 8 : t < 20 ? 1 : t < 28 ? 1 - (t - 20) / 8 : 0, k2 = s * s * (3 - 2 * s), bz = Math.round(zw - (zw - 1) * k2), h = zw - bz + 1;
+        drawEnt({ width: 3, height: h + 3, paint: (g, dx, dy) => {
+          g.fillStyle = '#E8E4DA'; g.fillRect(dx + 1, dy, 1, h);
+          g.fillStyle = '#A0703A'; g.fillRect(dx, dy + h, 3, 3); g.fillStyle = '#7A5226'; g.fillRect(dx, dy + h + 1, 3, 1);
+          if (t >= 20 && t < 28) { g.fillStyle = '#F4F1E8'; g.fillRect(dx + 1, dy + h - 1, 2, 1); }   // the newspaper going up
+        } }, px - 1, py - zw - 3, e.x, e.y);
+      } });
+      const L = look();                                               // someone waiting below while it's down
+      vig(u.x0 - .5, y + .15, [standing(L, 'idle', false), standing(L, 'idle2', false)], { show: () => { const t = phase(); return t > 6 && t < 21; }, seq: [[0, 2], [1, 1]] });
+    }
+  }
+}
+// tangled electric wires across the side streets, on concrete poles
+function wires(ax, ay, bx, by, n) {                               // wires between two pole tops (a straight line on the map)
+  const along = ay !== by, s = spr(Math.min(ax, bx), Math.min(ay, by), Math.max(ax, bx) + (along ? .08 : 0), Math.max(ay, by) + (along ? 0 : .08), 46, 6), g = s.g;
+  for (const [x, y] of [[ax, ay], [bx, by]]) {
+    const X = sx(x, y), Y = sy(x, y, 1);
+    g.fillStyle = '#A8A49A'; g.fillRect(X, Y - 38, 2, 38); g.fillStyle = '#86827A'; g.fillRect(X + 1, Y - 38, 1, 38); g.fillRect(X - 2, Y - 34, 6, 1);
+    g.fillStyle = 'rgba(30,30,30,.8)'; for (let i = 0; i < 12; i++) g.fillRect(X - 3 + V.i(0, 7), Y - 36 + V.i(0, 7), V.i(1, 3), 1);   // the knot at the top
+  }
+  g.fillStyle = 'rgba(28,28,28,.75)';
+  for (let i = 0; i < n; i++) {
+    const za = 27 + V() * 9, zb = 27 + V() * 9, sag = 3 + V() * (along ? 10 : 7);
+    const A = [sx(ax, ay), sy(ax, ay, za)], B = [sx(bx, by), sy(bx, by, zb)];
+    for (let c = A[0]; c <= B[0]; c++) { const t = (c - A[0]) / ((B[0] - A[0]) || 1); g.fillRect(c, Math.round(A[1] + (B[1] - A[1]) * t + sag * 4 * t * (1 - t)), 1, 1); }
+  }
+}
+function wiring() {
+  for (const [x0, x1, y0, y1, m] of NS) {
+    if (m) continue;
+    let last = null;
+    for (let y = y0 + 2 + V.i(0, 6); y < y1 - 2; y += V.i(8, 12)) {
+      if (at(x0 - 1, y) !== WALK || at(x1, y) !== WALK) { last = null; continue; }
+      wires(x0 - .6, y + .5, x1 + .4, y + .5, V.i(3, 6));
+      if (last !== null && y - last < 14) wires(x1 + .4, last + .5, x1 + .4, y + .5, V.i(2, 4));
+      last = y;
+    }
+  }
+}
+
 // ── time of day (Yangon time; ?t=18:30 to preview another hour) ─────────────
 const Q = new URLSearchParams(location.search);
 const ygn = new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Yangon', hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' });
@@ -1425,7 +1493,7 @@ addEventListener('resize', resize);
     if (s.ecv) eg.drawImage(s.ecv, s.left, s.top);
     s.ecv = s.eg = s.g = null;
   }
-  populate(); riverside(); suleLife(); parkLife();
+  populate(); riverside(); suleLife(); parkLife(); upperLife();
   resize(); camX = sx(CX, CY) - vw / 2; camY = sy(CX, CY, 60) - vh / 2; clampCam();
   document.getElementById('load').remove();
   tick(); setInterval(tick, 1000);

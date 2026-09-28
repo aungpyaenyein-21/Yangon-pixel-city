@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="my">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
+<title>Yangon Pixel City — ဆူးလေ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Padauk:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #1d2630; color: #fff; font-family: Padauk, system-ui, sans-serif; }
+  canvas { display: block; width: 100vw; height: 100vh; cursor: grab; touch-action: none; }
+  canvas.drag { cursor: grabbing; }
+  #hud { position: fixed; left: 12px; top: 12px; display: flex; gap: 8px; align-items: center; padding: 6px 10px;
+         background: rgba(20, 24, 32, .75); border-radius: 8px; font-size: 15px; user-select: none; }
+  #hud button { font: inherit; color: #fff; background: #3a4350; border: 0; border-radius: 6px; padding: 2px 10px; cursor: pointer; }
+  #hud button.on { background: #e3a21a; color: #1d1d1d; }
+  #load { position: fixed; inset: 0; display: grid; place-items: center; font-size: 20px; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="hud"><b>ဆူးလေ · ရန်ကုန်</b><span id="clock"></span><button data-z="1">×1</button><button data-z="2">×2</button></div>
+<div id="load">ရန်ကုန်မြို့ကို ဆွဲနေသည်… Drawing Yangon</div>
+<script src="city.js"></script>
+</body>
+</html>

@@ -206,10 +206,20 @@ const LM = {
   divcourt: [70, 141, 98, 147], temple: [19, 105, 24, 110],
 };
 
-const G = new Uint8Array(MW * MH), MAIN = new Uint8Array(MW * MH);
+const G = new Uint8Array(MW * MH), MAIN = new Uint8Array(MW * MH), HT = new Uint16Array(MW * MH);
 const ROAD = 1, WALK = 2, GRASS = 3, WATER = 4, PATH = 5, PROM = 6, PLAZA = 7, RES = 8, LOT = 9, ISLE = 10;
 const at = (x, y) => (x < 0 || y < 0 || x >= MW || y >= MH ? -1 : G[y * MW + x]);
 const rbd = (x, y) => Math.hypot(x + .5 - CX, y + .5 - CY);
+function mark(x0, y0, x1, y1, h) { for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) if (x >= 0 && y >= 0 && x < MW && y < MH) HT[y * MW + x] = h; }
+// can the camera see a figure h px tall standing at (x, y)? walk the sight line towards the south-west
+function seen(x, y, h = 10) {
+  for (let t = .5; t < 30; t += .5) {
+    const tx = Math.floor(x - t), ty = Math.floor(y + t);
+    if (tx < 0 || ty >= MH) return true;
+    if (HT[ty * MW + tx] > 12 * t + 1 + h / 2) return false;
+  }
+  return true;
+}
 function fill(x0, y0, x1, y1, t, only) {
   for (let y = Math.max(0, y0); y < Math.min(MH, y1); y++) for (let x = Math.max(0, x0); x < Math.min(MW, x1); x++) {
     const i = y * MW + x; if (only === undefined || G[i] === only) G[i] = t;
@@ -346,6 +356,7 @@ function billboard(g, e, x0, y0, x1, y1, H) {
 
 function shop(x0, y0, x1, y1, fl, stW, stS, main) {
   const H = 14 + (fl - 1) * FL + 2, s = spr(x0, y0, x1, y1, H + 40), g = s.g, e = glow(s);
+  mark(x0, y0, x1, y1, H);
   const col = pick(WALLS), win = pick(WIN), bal = chance(.35), grille = chance(.5);
   box(g, x0, y0, x1, y1, 0, H, col, '#A7A194');
   tF(g, x0 + 1 / 6, y0 + 1 / 6, x1 - 1 / 6, y1 - 1 / 6, H, '#948E82');
@@ -378,7 +389,7 @@ function shop(x0, y0, x1, y1, fl, stW, stS, main) {
     streaks(g, f, H);
     if (street && chance(.8)) {
       const [t, en] = shopSign((f.b - f.a) * 12 - 2);
-      if (t) { signOn(g, e, f, 13, t); if (en === 'TEA') teaSpots.push(f.w ? [f.k - 1, Math.floor((f.a + f.b) / 2)] : [Math.floor((f.a + f.b) / 2), f.k]); }
+      if (t) { signOn(g, e, f, 13, t); if (en === 'TEA') teaSpots.push(f.w ? [f.k - 1, Math.floor((f.a + f.b) / 2), 'E'] : [Math.floor((f.a + f.b) / 2), f.k, 'N']); }
     }
   }
   roofStuff(g, x0, y0, x1, y1, H);
@@ -388,6 +399,7 @@ function shop(x0, y0, x1, y1, fl, stW, stS, main) {
 
 function colonial(x0, y0, x1, y1, fl, col = pick(COLO), sign = null, stW = true, stS = true) {
   const FH = 13, H = 16 + (fl - 1) * FH + 5, s = spr(x0, y0, x1, y1, H + 30), g = s.g, e = glow(s), trim = '#F4EEE0';
+  mark(x0, y0, x1, y1, H);
   box(g, x0, y0, x1, y1, 0, H, col, '#B0A898');
   for (const f of faces(x0, y0, x1, y1)) {
     const street = f.w ? stW : stS;
@@ -658,14 +670,10 @@ function stall(x, y) {
   e.fillStyle = '#FFE7A0'; e.fillRect(X - 1, Y - 14, 3, 2);
   g.drawImage(person(pickKind()).f[0][0], X + 6, Y - 13);
 }
-function teaShop(x, y) {
-  const s = spr(x, y, x + 1, y + 1, 22, 4), g = s.g;
-  for (const [u, v] of [[.3, .35], [.7, .7]]) {
-    const cx = x + u, cy = y + v, tc = pick(['#D84040', '#3F7FD0', '#E8E4DA']);
-    box(g, cx - .12, cy - .12, cx + .12, cy + .12, 0, 4, tc);
-    g.fillStyle = '#F4F4F4'; g.fillRect(sx(cx, cy) - 1, sy(cx, cy, 5), 2, 1);
-    for (const [du, dv] of [[-.25, 0], [0, .25]]) { const px = sx(cx + du, cy + dv), py = sy(cx + du, cy + dv, 1); g.fillStyle = pick(['#E53935', '#1E88E5']); g.fillRect(px - 1, py - 2, 3, 2); g.drawImage(sitter(), px - 2, py - 11); }
-  }
+function teaShop(x, y, door) {          // tables go out on two sidewalk tiles; the people are vignettes (see teaVig)
+  door = door || (at(x + 1, y) === LOT ? 'E' : 'N');
+  const [x2, y2] = door === 'E' ? [x, y + 1] : [x + 1, y];
+  if (at(x2, y2) === WALK && seen(x + .5, y + .5) && free1(x2, y2)) teaVig(x, y, door);
 }
 function bench(x, y) { const s = spr(x, y + .3, x + .8, y + .6, 10, 3), g = s.g; box(g, x, y + .3, x + .8, y + .6, 2, 4, '#7A5C3E'); g.fillStyle = '#4A3726'; g.fillRect(sx(x + .1, y + .6), sy(x + .1, y + .6) - 2, 1, 2); }
 function busStop(x, y, alongX) {
@@ -822,7 +830,16 @@ function props() {
   for (const [y0, y1, x0, x1, m] of EW) if (m) for (let x = x0 + 3; x < x1; x += 8) for (const y of [y0 - 1, y1]) if (at(x, y) === WALK && rbd(x, y) > 10 && free1(x, y)) lamp(x + .5, y + .5);
   for (const [x0, x1, y0, y1, m] of NS) if (m) for (let y = y0 + 3; y < y1; y += 8) for (const x of [x0 - 1, x1]) if (at(x, y) === WALK && rbd(x, y) > 10 && free1(x, y)) lamp(x + .5, y + .5);
   for (let a = 0; a < 6.28; a += .785) { const x = CX + 9 * Math.cos(a), y = CY + 9 * Math.sin(a); if (free1(x, y)) lamp(x, y); }
-  for (const [x, y] of teaSpots) if (at(x, y) === WALK && free1(x, y)) teaShop(x, y);
+  for (const [x, y, door] of teaSpots) if (at(x, y) === WALK && free1(x, y)) teaShop(x, y, door);
+  const cand = [];                                        // sidewalks in front of shops that the camera can actually see
+  for (const [y0, , x0, x1] of EW) for (let x = x0; x < x1; x++) if (at(x, y0 - 1) === WALK && at(x, y0 - 2) === LOT) cand.push([x, y0 - 1, 'N']);
+  for (const [, x1, y0, y1] of NS) for (let y = y0; y < y1; y++) if (at(x1, y) === WALK && at(x1 + 1, y) === LOT) cand.push([x1, y, 'E']);
+  const teas = [];
+  for (let n = 0; n < 4000 && teas.length < 34; n++) {
+    const [x, y, door] = V.pick(cand);
+    if (rbd(x, y) < 11 || teas.some(([a, b]) => Math.abs(a - x) + Math.abs(b - y) < 9) || !seen(x + .5, y + .5) || !free1(x, y)) continue;
+    teas.push([x, y]); teaShop(x, y, door);
+  }
   for (let n = 0; n < 400; n++) {                         // street stalls, busiest near Sule
     const x = ri(0, MW - 1), y = ri(0, 151), d = Math.hypot(x - CX, y - CY);
     if (at(x, y) === WALK && d > 10 && rnd() < 40 / (d + 20) && free1(x, y)) (chance(.3) ? teaShop : stall)(x, y);
@@ -911,7 +928,7 @@ function populate() {
   const ring = { ring: 1, len: 2 * Math.PI * 9.1 };
   for (let i = 0; i < 16; i++) addWalker(ring, pickKind());
   const mline = { ax: 76.5, ay: 88.5, bx: 98, by: 88.5, len: 21.5 };      // morning alms round along the park
-  for (let i = 0; i < 8; i++) { addWalker(mline, 'monk', 2 + i * .9, true); const m = ents[ents.length - 1]; m.dir = 1; m.sp = .4; m.alms = 1; }
+  for (let i = 0; i < 8; i++) { addWalker(mline, 'monk', 2 + i * .9, true); const m = ents[ents.length - 1]; m.dir = 1; m.sp = .4; m.alms = 1; m.win = [330, 570]; }
   for (let i = 0; i < 40; i++) {                                           // pigeons
     const [x, y] = i < 25 ? [80 + rnd() * 9, 103 + rnd() * 9] : [CX + 9 * Math.cos(i), CY + 9 * Math.sin(i)];
     if (WALKABLE.has(at(x | 0, y | 0))) ents.push({ k: 'pig', x, y, hx: x, hy: y, t: rnd() * 2, r: rnd() });
@@ -923,6 +940,107 @@ function populate() {
     ents.push({ k: 'boat', y, x: rnd() * MW, v: (big ? .5 : .3 + rnd() * .3) * (dir === 'E' ? 1 : -1), spr: vehicle(big ? 'ferry' : 'sampan', dir, col), r: 0 });
   }
   for (let i = 0; i < 260; i++) { const x = rnd() * MW, y = 155.5 + rnd() * 20; sparkles.push([x, y, rnd() * 6.28]); }
+}
+
+// ── vignettes: a few people doing one slow thing, at one place, at certain hours ──
+function rng(seed) {
+  const f = () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296;
+  f.i = (a, b) => a + Math.floor(f() * (b - a + 1)); f.pick = a => a[Math.floor(f() * a.length)]; f.p = p => f() < p;
+  return f;
+}
+const V = rng(2024);                                   // own random stream, so the buildings stay as they were
+const inWin = (m, w) => (w[0] <= w[1] ? m >= w[0] && m < w[1] : m >= w[0] || m < w[1]);
+const onNow = e => (Array.isArray(e.win[0]) ? e.win.some(w => inWin(mins, w)) : inWin(mins, e.win));
+const jit = (w, n = 30) => [w[0] + Math.floor(V() * n), w[1] - Math.floor(V() * n)];   // people arrive and leave one by one
+const anchor = (c, ax, ay) => Object.assign(c, { ax, ay });
+function pix(w, h, fn) { const c = mk(w, h), g = c.getContext('2d'); fn((x, y, ww, hh, col) => { g.fillStyle = col; g.fillRect(x, y, ww, hh); }); return c; }
+function thing(x0, y0, x1, y1, h, pad, draw) {         // a small iso object drawn around the origin
+  const s = spr(x0, y0, x1, y1, h, pad, false); draw(s.g); return anchor(s.cv, -s.left, OY - s.top);
+}
+function vig(x, y, pics, o = {}) {                     // seq: [[picture, seconds], …] played in a loop
+  const seq = o.seq || [[0, 1]], tot = seq.reduce((a, q) => a + q[1], 0);
+  const e = { k: 'vig', x, y, z: o.z ?? 1, pics, seq, tot, ph: V() * tot, win: o.win, d: o.d || 0, r: 0, tick: o.tick, show: o.show, draw: o.draw };
+  ents.push(e); return e;
+}
+function vigPic(e) { let t = (T + e.ph) % e.tot; for (const [i, d] of e.seq) { if (t < d) return e.pics[i]; t -= d; } return e.pics[0]; }
+
+// people in poses (all cached at boot)
+const PAPER = '#EFEDE4', INK = '#A5A39A', SHOE = '#3B2B20';
+function look(kind) {
+  const woman = kind === 'woman' || (!kind && V.p(.45)), old = kind === 'old' || V.p(.18);
+  return { woman, skin: V.pick(SKIN), hair: old ? '#CFCBC2' : '#1B1512', shirt: V.pick(SHIRT), low: woman ? V.pick(HTAMEIN) : V.pick(LONGYI), book: V.pick(GOODS) };
+}
+function head(P, L, hx, hy, back) {
+  P(hx, hy, 3, 1, L.hair); P(hx, hy + 1, 3, 2, back ? L.hair : L.skin); if (back) P(hx, hy + 2, 3, 1, L.skin);
+  if (L.woman) { P(hx + 1, hy - 1, 1, 1, L.hair); if (!back) P(hx, hy + 2, 1, 1, '#EADFB4'); }   // bun, thanaka
+}
+function seated(L, pose, back) {                       // 7×11, feet on the ground at row 10
+  return anchor(pix(7, 11, P => {
+    head(P, L, pose === 'lean' ? 1 : 2, 0, back);
+    P(2, 3, 3, 3, L.shirt); P(1, 6, 5, 2, L.low); P(2, 7, 3, 1, sh(L.low, .8));
+    P(2, 8, 1, 2, L.skin); P(4, 8, 1, 2, L.skin); P(1, 10, 2, 1, SHOE); P(4, 10, 2, 1, SHOE);
+    const armL = () => { P(1, 3, 1, 2, L.shirt); P(1, 5, 1, 1, L.skin); }, armR = () => { P(5, 3, 1, 2, L.shirt); P(5, 5, 1, 1, L.skin); };
+    if (pose === 'sip') { armL(); P(5, 3, 1, 1, L.shirt); P(5, 2, 1, 1, L.skin); P(5, 1, 1, 1, '#F4F1E8'); }
+    else if (pose === 'talk') { armL(); P(5, 3, 1, 1, L.shirt); P(6, 2, 1, 1, L.skin); }
+    else if (pose === 'paper' || pose === 'paper2') {
+      const d = pose === 'paper2' ? 1 : 0; P(0, 2 + d, 7, 5 - d, PAPER); P(1, 3 + d, 5, 1, INK); P(1, 5, 4, 1, INK); P(3, 2 + d, 1, 5 - d, '#D6D3C8');
+    } else if (pose === 'read' || pose === 'read2') { armL(); armR(); P(2, 4, 3, 2, pose === 'read' ? L.book : PAPER); P(1, 4, 1, 1, L.skin); P(5, 4, 1, 1, L.skin); }
+    else if (pose === 'fan' || pose === 'fan2') { armL(); P(5, 3, 1, 1, L.shirt); P(5, pose === 'fan' ? 2 : 3, 2, 2, '#C9A15A'); }
+    else if (pose === 'rod') { P(1, 3, 1, 2, L.shirt); P(5, 3, 1, 1, L.shirt); P(5, 4, 1, 1, L.skin); P(1, 5, 1, 1, L.skin); }
+    else { armL(); armR(); }
+  }), 3, 10);
+}
+function kid(L, pose) {                                // 5×11 child / tea-shop boy, feet at row 10
+  return anchor(pix(7, 11, P => {
+    head(P, L, 1, 0, false);
+    P(1, 3, 3, 3, L.shirt); P(1, 6, 3, 2, L.low);
+    if (pose === 'walk2') { P(2, 8, 1, 2, L.skin); P(2, 10, 1, 1, SHOE); } else { P(1, 8, 1, 2, L.skin); P(3, 8, 1, 2, L.skin); P(1, 10, 1, 1, SHOE); P(3, 10, 1, 1, SHOE); }
+    if (pose === 'throw') { P(0, 3, 1, 2, L.shirt); P(4, 3, 2, 1, L.shirt); P(5, 4, 1, 1, L.skin); P(6, 6, 1, 1, '#E8D6A0'); P(5, 8, 1, 1, '#E8D6A0'); }
+    else { P(0, 3, 1, 2, L.shirt); P(0, 5, 1, 1, L.skin); P(4, 3, 1, 2, L.shirt); P(4, 5, 1, 1, L.skin); }
+    if (L.tray) { P(3, 4, 3, 1, '#C0C4C8'); P(4, 3, 1, 1, '#FFFFFF'); P(4, 4, 1, 1, L.skin); }
+  }), 2, 10);
+}
+
+// tea shop: low tables and tiny plastic stools on the sidewalk, regulars, and the boy who brings the tea
+const STOOLS = ['#D84040', '#3F7FD0', '#D84040', '#2E9E6A'];
+const teaTable = top => thing(-.1667, -.1667, .1667, .1667, 12, 3, g => {
+  box(g, -.1667, -.1667, .1667, .1667, 1, 5, top[0], top[1]);
+  g.fillStyle = '#FFFFFF'; g.fillRect(sx(-.04, .02) - 1, sy(-.04, .02, 6), 1, 1); g.fillRect(sx(.05, -.03), sy(.05, -.03, 6), 1, 1);
+  g.fillStyle = '#6D4C41'; g.fillRect(sx(0, 0) - 1, sy(0, 0, 7), 2, 2);
+});
+const stool = c => thing(-.0625, -.0625, .0625, .0625, 6, 2, g => box(g, -.0625, -.0625, .0625, .0625, 1, 4, c));
+const teaWin = () => jit(V.pick([[330, 600], [345, 560], [960, 1300], [1000, 1320], [420, 1260], [600, 1000]]), 40);
+function drinker(x, y, back) {
+  const L = look(), habit = V.pick(['sip', 'sip', 'paper', 'talk']);
+  const poses = habit === 'paper' ? ['paper', 'paper2'] : habit === 'talk' ? ['sit', 'talk', 'sip'] : ['sit', 'sip'];
+  const seq = habit === 'paper' ? [[0, 3 + V() * 3], [1, .6 + V() * .5]]
+    : habit === 'talk' ? [[0, 1.5 + V() * 2], [1, 1 + V()], [0, 1 + V() * 2], [1, .8 + V() * .6], [0, 2 + V() * 2], [2, 1.3]]
+    : [[0, 2.5 + V() * 3], [1, 1.2 + V() * .8]];
+  vig(x, y, poses.map(p => seated(L, p, back)), { seq, win: teaWin() });
+}
+function teaVig(x, y, door) {
+  // a = along the sidewalk (0‥2 tiles), c = across it (0 = kerb, 1 = shop front)
+  const at2 = (a, c) => (door === 'E' ? [x + c, y + a] : [x + a, y + 1 - c]);
+  const tables = [.35, 1, 1.65].map(a => at2(a, .5));
+  const top = V.pick([['#8B5A2B', '#A87445'], ['#E8E4DA', '#FFFFFF'], ['#3F7FD0', '#5A96E0']]);
+  for (const [i, [tx, ty]] of tables.entries()) {
+    vig(tx, ty, [teaTable(top)], { z: 0 });
+    for (const [da, dc] of [[-.3, 0], [.3, 0], [0, -.33]]) {
+      const [px, py] = at2([.35, 1, 1.65][i] + da, .5 + dc);
+      vig(px, py, [stool(V.pick(STOOLS))], { z: 0, d: -.02 });
+      if (V.p(.6)) drinker(px, py, px < tx - .01 || py > ty + .01);   // west / south seats face away from us
+    }
+  }
+  const L = look('man'); L.tray = 1; L.shirt = V.pick(['#FFFFFF', '#E8E1CF', '#6FA8DC']);
+  const f = ['idle', 'walk1', 'walk2'].map(p => kid(L, p)), P = 12 + V() * 6, ph = V() * P * 3;
+  const home = at2(1, .95);
+  tables.forEach(t => { const [ex, ey] = at2(0, .78); t[0] += ex - at2(0, .5)[0]; t[1] += ey - at2(0, .5)[1]; });   // the boy stops beside a table
+  vig(home[0], home[1], f, { win: [330, 1320], tick: e => {        // out to a table, wait, back to the counter
+    const t = (T + ph) % P, tb = tables[Math.floor((T + ph) / P) % 3];
+    const u = t < 3 ? 0 : t < 5.5 ? (t - 3) / 2.5 : t < 7.5 ? 1 : t < 10 ? 1 - (t - 7.5) / 2.5 : 0;
+    e.x = home[0] + (tb[0] - home[0]) * u; e.y = home[1] + (tb[1] - home[1]) * u;
+    e.cur = u > 0 && u < 1 ? f[1 + (Math.floor(T * 3) % 2)] : f[0];
+  } });
 }
 
 // ── time of day (Yangon time; ?t=18:30 to preview another hour) ─────────────
@@ -973,6 +1091,8 @@ function update(dt) {
       if (!e.alms && Math.random() < dt * .015) e.dir = -e.dir;
     } else if (e.k === 'pig') {
       e.t -= dt; if (e.t < 0) { e.t = .4 + Math.random() * 1.5; e.x = e.hx + (Math.random() - .5) * 1.5; e.y = e.hy + (Math.random() - .5) * 1.5; }
+    } else if (e.k === 'vig') {
+      if (e.tick) e.tick(e);
     } else if (e.k === 'boat') {
       e.x += e.v * dt; if (e.x > MW + 3) e.x = -3; if (e.x < -3) e.x = MW + 3;
     }
@@ -987,7 +1107,7 @@ function behind(ex, ey, s) {
   return ex > s.x0 && ey < s.y1;
 }
 function drawEnt(img, dx, dy, ex, ey) {           // draw, then redraw whatever should hide it
-  fg.drawImage(img, dx, dy);
+  if (img.paint) img.paint(fg, dx, dy); else fg.drawImage(img, dx, dy);
   let clip = false;
   for (const s of drawList) {
     if (s.left >= dx + img.width || s.left + s.w <= dx || s.top >= dy + img.height || s.top + s.h <= dy || !behind(ex, ey, s)) continue;
@@ -1008,11 +1128,12 @@ function render() {
   const vis = [];
   for (const e of ents) {
     if (e.r > density && e.k !== 'boat') continue;
-    if (e.alms && !(mins > 330 && mins < 570)) continue;
+    if (e.win && !onNow(e)) continue;
+    if (e.show && !e.show(e)) continue;
     const px = sx(e.x, e.y); if (px < X - 60 || px > X + vw + 60) continue;
     vis.push(e);
   }
-  vis.sort((a, b) => (a.y - a.x) - (b.y - b.x));
+  vis.sort((a, b) => (a.y - a.x + (a.d || 0)) - (b.y - b.x + (b.d || 0)));
   const lights = [];
   for (const e of vis) {
     const px = sx(e.x, e.y), py = sy(e.x, e.y);
@@ -1024,6 +1145,9 @@ function render() {
       const vx = e.l.ring ? -Math.sin(e.s / 9.1) * e.dir : (e.l.bx - e.l.ax) * e.dir, vy = e.l.ring ? Math.cos(e.s / 9.1) * e.dir : (e.l.by - e.l.ay) * e.dir;
       const img = e.spr.f[vx < 0 || vy > 0 ? 0 : 1][e.pause > 0 ? 0 : Math.floor(T * 4 + e.ph) % 2];
       drawEnt(img, px - 3, py - 1 - 14, e.x, e.y);
+    } else if (e.k === 'vig') {
+      if (e.draw) e.draw(e, px, py);
+      else { const c = e.cur || vigPic(e); drawEnt(c, px - c.ax, py - e.z - c.ay, e.x, e.y); }
     } else if (e.k === 'pig') {
       fg.fillStyle = '#6E737B'; fg.fillRect(px - 1, py - 2, 2, 1); fg.fillStyle = '#9AA0A8'; fg.fillRect(px + 1, py - 3, 1, 1);
     }
@@ -1106,6 +1230,8 @@ addEventListener('resize', resize);
   colonial(...LM.ysx, 3, '#EFE7D2', { f: 'w', t: signTex('စတော့အိတ်ချိန်း', 'YSX', '#0D3C61', '#FFFFFF') });
   colonial(...LM.usemb, 4, '#E7D08E'); colonial(...LM.meie, 3, '#BFBAB0');
   colonial(...LM.divcourt, 3, '#A5452F', { f: 's', t: signTex('တိုင်းတရားရုံး', 'DIVISION COURT', '#EFE6D6', '#6B2A1F') });
+  for (const [k, h] of Object.entries({ hall: 40, mosque: 32, fire: 38, shangri: 232, sakura: 164, shae: 82, sulecin: 82, church: 30, court: 40, temple: 14 })) mark(...LM[k], h);
+  for (let y = CY - 5; y < CY + 5; y++) for (let x = CX - 5; x < CX + 5; x++) if (rbd(x, y) < 5) HT[y * MW + x] = 70;
   lots(); props();
   ST = mk(CW, CH); EM = mk(CW, CH);
   const sg = ST.getContext('2d'), eg = EM.getContext('2d');

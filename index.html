@@ -4,18 +4,31 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
 <title>Yangon Pixel City — ဆူးလေ</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Padauk:wght@400;700&display=swap" rel="stylesheet">
+<link rel="preload" href="fonts/padauk-400-myanmar.woff2" as="font" type="font/woff2" crossorigin>
+<link rel="preload" href="fonts/padauk-700-myanmar.woff2" as="font" type="font/woff2" crossorigin>
 <style>
+  /* Padauk, SIL Open Font License (fonts/OFL.txt) — self-hosted so the signs never fall back to another font */
+  @font-face { font-family: Padauk; font-weight: 400; font-display: block; src: url(fonts/padauk-400-myanmar.woff2) format('woff2');
+    unicode-range: U+1000-109F, U+200C-200D, U+25CC, U+A92E, U+A9E0-A9FE, U+AA60-AA7F; }
+  @font-face { font-family: Padauk; font-weight: 400; font-display: block; src: url(fonts/padauk-400-latin.woff2) format('woff2');
+    unicode-range: U+0000-00FF, U+2000-206F, U+2122, U+2212; }
+  @font-face { font-family: Padauk; font-weight: 700; font-display: block; src: url(fonts/padauk-700-myanmar.woff2) format('woff2');
+    unicode-range: U+1000-109F, U+200C-200D, U+25CC, U+A92E, U+A9E0-A9FE, U+AA60-AA7F; }
+  @font-face { font-family: Padauk; font-weight: 700; font-display: block; src: url(fonts/padauk-700-latin.woff2) format('woff2');
+    unicode-range: U+0000-00FF, U+2000-206F, U+2122, U+2212; }
   html, body { margin: 0; height: 100%; overflow: hidden; background: #1d2630; color: #fff; font-family: Padauk, system-ui, sans-serif; }
   canvas { display: block; width: 100vw; height: 100vh; cursor: grab; touch-action: none; }
   canvas.drag { cursor: grabbing; }
   #hud { position: fixed; left: 12px; top: 12px; display: flex; gap: 8px; align-items: center; padding: 6px 10px;
-         background: rgba(20, 24, 32, .75); border-radius: 8px; font-size: 15px; user-select: none; }
+         background: rgba(20, 24, 32, .75); border-radius: 8px; font-size: 15px; user-select: none; white-space: nowrap; }
   #hud button { font: inherit; color: #fff; background: #3a4350; border: 0; border-radius: 6px; padding: 2px 10px; cursor: pointer; }
   #hud button.on { background: #e3a21a; color: #1d1d1d; }
   #load { position: fixed; inset: 0; display: grid; place-items: center; font-size: 20px; }
+  @media (max-width: 480px) {            /* phones: one line — drop the English word, tighten up */
+    #hud { left: 8px; top: 8px; gap: 6px; padding: 4px 8px; font-size: 13px; }
+    #hud .en { display: none; }
+    #hud button { padding: 1px 8px; }
+  }
 </style>
 </head>
 <body>

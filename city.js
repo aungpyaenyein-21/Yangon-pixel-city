@@ -1347,7 +1347,7 @@ function light(m) {
   const [ma, ca, la] = KEYS[i], [mb, cb, lb] = KEYS[i + 1], t = (m - ma) / (mb - ma);
   return { rgb: ca.map((v, k) => Math.round(v + (cb[k] - v) * t)), L: la + (lb - la) * t };
 }
-const phaseName = m => (m >= 300 && m < 600 ? 'နံနက် Morning' : m >= 600 && m < 960 ? 'နေ့လယ် Day' : m >= 960 && m < 1140 ? 'ညနေ Evening' : 'ည Night');
+const phaseName = m => (m >= 300 && m < 600 ? ['နံနက်', 'Morning'] : m >= 600 && m < 960 ? ['နေ့လယ်', 'Day'] : m >= 960 && m < 1140 ? ['ညနေ', 'Evening'] : ['ည', 'Night']);
 const busy = m => (m < 300 ? .15 : m < 360 ? .35 : m < 1260 ? 1 : m < 1380 ? .5 : .2);
 
 // ── runtime ──────────────────────────────────────────────────────────────────
@@ -1472,7 +1472,8 @@ function tick() {
   const s = Math.floor(mins);
   if (s !== lastClock) {
     lastClock = s; const h = String(Math.floor(s / 60)).padStart(2, '0'), m = String(s % 60).padStart(2, '0');
-    document.getElementById('clock').textContent = `ရန်ကုန် ${h}:${m} · ${phaseName(mins)}`;
+    const [my, en] = phaseName(mins);
+    document.getElementById('clock').innerHTML = `${h}:${m} · ${my}<span class="en"> ${en}</span>`;
   }
 }
 let last = performance.now();
@@ -1516,7 +1517,8 @@ addEventListener('resize', resize);
 
 // ── boot ─────────────────────────────────────────────────────────────────────
 (async () => {
-  await Promise.race([Promise.all([document.fonts.load(`11px ${MYF}`), document.fonts.load(`bold 15px ${MYF}`)]), new Promise(r => setTimeout(r, 2500))]);
+  // the Burmese subset only loads when asked for Burmese text, so ask with some
+  await Promise.race([Promise.all([document.fonts.load(`11px ${MYF}`, 'မြန်မာ Aa'), document.fonts.load(`bold 15px ${MYF}`, 'မြန်မာ Aa')]), new Promise(r => setTimeout(r, 10000))]);
   layout();
   sule(); cityHall(); mosque(); fireStation(); shangriLa(); sakura(); church(); court(); temple(); jetty(); monument();
   cinema(LM.shae, 'ရှေ့ဆောင်', 'SHAE SAUNG CINEMA', '#EADCC0');

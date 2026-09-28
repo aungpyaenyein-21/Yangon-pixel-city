@@ -570,12 +570,15 @@ function shrine(x, y, z) {
   box(g, x - .3, y - .3, x + .3, y + .3, z, z + 9, '#F2ECDF');
   const f = { w: 0, k: y + .3 }; fr(g, f, x - .13, x + .13, z + 1, z + 7, '#3B2A22'); fr(g, f, x - .05, x + .05, z + 2, z + 5, '#E8B83A');
   fr(e, f, x - .13, x + .13, z + 1, z + 7, '#FFD27A');
-  pyatthat(g, x, y, z + 9, .42, 3, V.pick(['#B8862A', '#8E2F24']));
+  pyatthat(g, x, y, z + 9, .42, 3, roofCol());
 }
-const HALLC = [['#F3EDE1', '#8E2F24'], ['#F3EDE1', '#B8862A'], ['#E9D9B5', '#8E2F24'], ['#C9473A', '#D9A93A'], ['#F3EDE1', '#3E5F55']];
+// Shwedagon is gold and white: roofs mostly the green of the photos with gold trim, many all-gold, a few deep red
+const ROOF_GREEN = '#2E8570', ROOF_GOLD = '#D9A93A', ROOF_RED = '#8E2F24';
+const roofCol = () => { const r = V(); return r < .55 ? ROOF_GREEN : r < .9 ? ROOF_GOLD : ROOF_RED; };
+const WALLC = ['#F3EDE1', '#F6F1E6', '#EFE7D6'];
 function hall(x0, y0, x1, y1) {
   const long = Math.max(x1 - x0, y1 - y0) > 12, h = long ? 9 : 8 + V.i(0, 1) * 2;
-  const s = spr(x0, y0, x1, y1, PZ + h + 110, 4), g = s.g, e = glow(s), [wall, roof] = V.pick(HALLC);
+  const s = spr(x0, y0, x1, y1, PZ + h + 110, 4), g = s.g, e = glow(s), wall = V.pick(WALLC), roof = roofCol();
   if (long) {                                                     // a covered walkway: pillars and a long roof
     for (const f of faces(x0, y0, x1, y1)) for (let u = f.a; u < f.b; u += 1) fr(g, f, u, u + .17, PZ, PZ + h, sh('#C9473A', f.s));
     for (let v = y0; v < y1; v += 2) box(g, x0, v, x1, Math.min(y1, v + 1.5), PZ + h, PZ + h + 2, '#8E6A4A', '#A5825E');   // slatted, so it doesn't swamp the view
@@ -617,10 +620,10 @@ function post([day, x, y, animal]) {                              // a small Bud
 }
 function bellPavilion(x, y) {
   const s = spr(x - 1, y - 1, x + 1, y + 1, PZ + 110, 4), g = s.g;
-  g.fillStyle = '#8E2F24';
+  g.fillStyle = '#B8862A';
   for (const [u, v] of [[x - .9, y + .9], [x + .9, y + .9], [x - .9, y - .9], [x + .9, y - .9]]) g.fillRect(sx(u, v), sy(u, v, PZ) - 24, 1, 24);
   lathe(g, x, y, PZ + 4, 18, t => .25 + .55 * Math.pow(1 - t / 18, 1.6), ['#C9A060', '#A88048', '#8A6A3A', '#6E522C', '#55401F'], '#B8904E');   // the bronze bell
-  pyatthat(g, x, y, PZ + 24, 1.1, 3, '#8E2F24');
+  pyatthat(g, x, y, PZ + 24, 1.1, 3, ROOF_GREEN);
 }
 function treeAt(x, y, R, z, keep = true) {                         // the shared tree, standing on the platform or the hill
   const th = V.i(6, 10), rx = Math.round(R * 15), ry = Math.round(R * 12);
@@ -653,12 +656,12 @@ function stairway() {
       fr(e, f, u + .1, u + .5, fz + 8, rz - 2, '#FFD690');
     }
     box(g, x0 - .15, a, x1 + .15, b, rz, rz + 3, '#B8862A', '#D9A93A');
-    box(g, x0 + .4, a + .2, x1 - .4, b - .2, rz + 3, rz + 6, '#8E2F24', '#A8342A');
+    box(g, x0 + .4, a + .2, x1 - .4, b - .2, rz + 3, rz + 6, ROOF_GREEN, sh(ROOF_GREEN, 1.18));
   }
   const gate = spr(x0 - .8, y1 - .6, x1 + .8, y1 + .4, 130, 4), gg = gate.g;   // the gateway at the foot
   box(gg, x0 - .8, y1 - .6, x0 - .2, y1 + .4, 0, 26, '#F2ECDF'); box(gg, x1 + .2, y1 - .6, x1 + .8, y1 + .4, 0, 26, '#F2ECDF');
   box(gg, x0 - .8, y1 - .6, x1 + .8, y1 + .4, 26, 30, '#D9A93A');
-  pyatthat(gg, (x0 + x1) / 2, y1 - .1, 30, 1.6, 5, '#8E2F24');
+  pyatthat(gg, (x0 + x1) / 2, y1 - .1, 30, 1.6, 5, ROOF_GOLD);
 }
 function chinthe(x, y, flip) {                                     // the two great white leogryphs guarding the south gate
   const s = spr(x - 1, y - 1, x + 1, y + 1, 80, 4), g = s.g;

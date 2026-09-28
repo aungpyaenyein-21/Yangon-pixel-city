@@ -479,6 +479,7 @@ function ground(g, backdrop) {
 }
 
 // the main stupa: gilded terraces, octagonal dais, the bell, bowl, lotus, banana bud, hti, vane and diamond orb
+const hash = k => { const v = Math.sin(k * 12.9898 + 78.233) * 43758.5453; return v - Math.floor(v); };
 function stupa() {
   const s = spr(...INNER, 350, 6), g = s.g, e = glow(s);
   s.round = 1; s.cx = CX; s.cy = CY;
@@ -488,22 +489,54 @@ function stupa() {
     box(e, a, b, c, d, BZ + z0, BZ + z1, '#FFD86A', '#FFE9A0');
     for (const f of faces(a, b, c, d)) for (let u = f.a + .25; u < f.b; u += 1) fr(g, f, u, u + .25, BZ + z0 + 2, BZ + z1 - 1, sh('#B8862A', f.s));
   }
-  const H = 250, k = 186 / H, prof = zz => { const z = zz * k; return (
-    z < 8 ? 4.8 : z < 12 ? 4.4 : z < 16 ? 4.1 : z < 20 ? 3.8                       // octagonal dais and the circular bands
-    : z < 82 ? 2.1 + 1.6 * Math.cos((z - 20) / 62 * Math.PI / 2)                    // the bell
-    : z < 92 ? 2.25                                                                   // inverted alms bowl
-    : z < 106 ? 1.85 - (z - 92) * .03                                                 // double lotus
-    : z < 162 ? .2 + 1.2 * Math.pow(1 - (z - 106) / 56, 1.25)                         // banana bud
-    : z < 176 ? .5 - (z - 162) * .025 : z < 182 ? .05 : .09); };                     // hti, vane, diamond orb
-  lathe(g, CX, CY, BZ + 26, H, prof, GOLD, '#FFF6C8', .02);
-  lathe(e, CX, CY, BZ + 26, H, prof, GOLDN, '#FFFDF0');
-  const X = sx(CX, CY), Y0 = sy(CX, CY, BZ + 26);                    // lotus petals, a line of dots round the bowl
-  for (let a = .15; a < Math.PI - .1; a += .22) {
-    const r = 1.9 * HW * Math.SQRT2, rr = 1.9 * HH * Math.SQRT2;
-    g.fillStyle = '#FFF2B0'; g.fillRect(Math.round(X + r * Math.cos(a)), Math.round(Y0 - 95 / k + rr * Math.sin(a)), 1, 2);
-    g.fillStyle = '#C98E1A'; g.fillRect(Math.round(X + 2.3 * HW * Math.SQRT2 * Math.cos(a)), Math.round(Y0 - 86 / k + 2.3 * HH * Math.SQRT2 * Math.sin(a)), 1, 1);
+  // profile, px above the terraces → radius in tiles. The Shwedagon silhouette is the contrast between
+  // the full, round-shouldered bell and the long slender banana bud above it.
+  const Z0 = BZ + 26, H = 250, SEAMS = [22, 100, 116, 134, 206];
+  const prof = z =>
+    z < 10 ? 4.8 : z < 14 ? 4.4 : z < 18 ? 4.1 : z < 22 ? 3.8                           // octagonal dais, three rings
+    : z < 100 ? 2 + 1.65 * Math.sqrt(Math.max(0, 1 - ((z - 22) / 78) ** 2.4))          // the bell: stays wide, then rounds over
+    : z < 112 ? 2.1 + .18 * Math.sin((z - 100) / 12 * Math.PI)                          // inverted alms bowl
+    : z < 116 ? 1.95                                                                     // ornamental band
+    : z < 125 ? 2.05 - (z - 116) * .05 : z < 134 ? 1.55 + (z - 125) * .03              // double lotus: down-turned, then up-turned
+    : z < 206 ? .14 + 1.28 * Math.pow(1 - (z - 134) / 72, 1.7)                          // banana bud, long and slender
+    : 0;
+  lathe(g, CX, CY, Z0, 205, prof, GOLD, '#FFF6C8', .02);
+  lathe(e, CX, CY, Z0, 205, prof, GOLDN, '#FFFDF0');
+  // the hti: seven tiers, each flaring at its rim, a paler, jewelled gold
+  const HTI = ['#FFF7DC', '#F8E6A6', '#EDCC6A', '#D6AC45', '#B08530', '#80601E'];
+  const hti = z => { const t = Math.floor(z / 4.3), f = (z % 4.3) / 4.3; return z >= 30 ? 0 : (.5 - t * .055) * (1 - f * .35) + .04; };
+  lathe(g, CX, CY, Z0 + 206, 30, hti, HTI, '#FFFBEA');
+  lathe(e, CX, CY, Z0 + 206, 30, hti, GOLDN, '#FFFDF0');
+  const X = sx(CX, CY), Y = z => sy(CX, CY, Z0 + z);
+  const arc = (c, z, r, col) => {                                  // the front half of a ring round the stupa
+    const rx = r * HW * Math.SQRT2, ry = r * HH * Math.SQRT2; c.fillStyle = col;
+    for (let x = -Math.floor(rx); x <= rx; x++) c.fillRect(X + x, Math.round(Y(z) + ry * Math.sqrt(Math.max(0, 1 - (x / rx) ** 2))), 1, 1);
+  };
+  for (const z of SEAMS) {                                         // a dark line at each seam, a bright one just above
+    const r = prof(z + 1) || hti(0);
+    arc(g, z, r + .02, '#7A4E08'); arc(g, z + 1, r, '#FFF2A6');
+    arc(e, z, r + .02, '#C88A10'); arc(e, z + 1, r, '#FFFBE6');
   }
-  g.fillStyle = '#6E6A66'; g.fillRect(X + 1, Y0 - H + 3, 2, 3);        // the vane
+  const petals = (z0, up, r0, col, dark) => {                      // lotus petals round the front of the lotus bands
+    const rx = r0 * HW * Math.SQRT2, ry = r0 * HH * Math.SQRT2;
+    for (let a = .12; a < Math.PI - .08; a += .21) {
+      const px = Math.round(X + rx * Math.cos(a)), py = Math.round(Y(z0) + ry * Math.sin(a));
+      for (let i = 0; i < 5; i++) {
+        const w = up ? Math.max(0, 2 - (i >> 1)) : Math.min(2, i >> 1), yy = up ? py - i : py - 4 + i;
+        g.fillStyle = col; g.fillRect(px - w, yy, 2 * w + 1, 1);
+        g.fillStyle = dark; g.fillRect(px + w + 1, yy, 1, 1);
+      }
+    }
+  };
+  petals(116, false, 2.02, '#F6D77E', '#A87420');
+  petals(126, true, 1.6, '#FFF0B0', '#B8821A');
+  for (let a = .2; a < Math.PI - .1; a += .3) {                    // a garland of beads round the bowl
+    const r = 2.25 * HW * Math.SQRT2, rr = 2.25 * HH * Math.SQRT2;
+    g.fillStyle = '#FFF2B0'; g.fillRect(Math.round(X + r * Math.cos(a)), Math.round(Y(106) + rr * Math.sin(a)), 1, 1);
+  }
+  g.fillStyle = '#9A958E'; g.fillRect(X, Y(236) - 6, 1, 6); g.fillRect(X + 1, Y(236) - 6, 3, 2);   // the vane
+  g.fillStyle = '#E8D6A0'; g.fillRect(X - 1, Y(244), 3, 3); g.fillStyle = '#FFFFFF'; g.fillRect(X, Y(244), 1, 1);   // the diamond orb
+  g.fillRect(X, Y(248), 1, 3);
 }
 function smallStupa(x, y, z, k) {
   const sc = k === 2 ? 1.5 : k === 3 ? .8 : 1, s = spr(x - .5 * sc, y - .5 * sc, x + .5 * sc, y + .5 * sc, z + 40 * sc, 4), g = s.g, e = glow(s);
@@ -852,8 +885,14 @@ function render() {
     const x = CX + b.r * Math.cos(b.a), y = CY - b.r * Math.sin(b.a), X2 = sx(x, y), Y2 = sy(x, y, b.z), f = (T * 8 + b.r) % 2 < 1;
     fg.fillRect(X2 - 1, Y2 - (f ? 1 : 0), 1, 1); fg.fillRect(X2, Y2, 1, 1); fg.fillRect(X2 + 1, Y2 - (f ? 1 : 0), 1, 1);
   }
-  const ox = sx(CX, CY) + 1, oy = sy(CX, CY, BZ + 26 + 250), tw = Math.sin(T * 1.7) + Math.sin(T * 4.1) * .4;   // the diamond orb catches the light
-  if (tw > .7) { fg.fillStyle = '#FFFFFF'; fg.fillRect(ox - 2, oy, 5, 1); fg.fillRect(ox, oy - 2, 1, 5); glows.push([ox - 2, oy, '#FFFFFF', 5]); glows.push([ox, oy - 2, '#FFFFFF', 1, 5]); }
+  // the diamond orb catches the light: a 3-frame glint every 5–9 s by day, every 10–15 s by night
+  const night = lt.L > .5, gap = night ? 10 + 5 * hash(Math.floor(T / 12)) : 5 + 4 * hash(Math.floor(T / 7)), tg = T % gap;
+  if (tg < .36) {
+    const ox = sx(CX, CY), oy = sy(CX, CY, BZ + 26 + 245), f = Math.floor(tg / .12);
+    fg.fillStyle = '#FFFFFF';
+    if (f === 1) { fg.fillRect(ox - 2, oy, 5, 1); fg.fillRect(ox, oy - 2, 1, 5); glows.push([ox - 2, oy, '#FFFFFF', 5, 1], [ox, oy - 2, '#FFFFFF', 1, 5]); }
+    else { fg.fillRect(ox, oy, 1, 1); glows.push([ox, oy, '#FFFFFF', 1, 1]); }
+  }
   fg.restore();
   if (lt.rgb.some(v => v < 255)) {
     fg.globalCompositeOperation = 'multiply'; fg.fillStyle = `rgb(${lt.rgb})`; fg.fillRect(0, 0, vw, vh); fg.globalCompositeOperation = 'source-over';

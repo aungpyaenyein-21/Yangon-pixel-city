@@ -987,14 +987,17 @@ const R6 = 6.75, rad = Math.PI / 180;
 const arc = (a0, a1) => { const p = [], n = Math.ceil((a1 - a0) / 12); for (let i = 0; i <= n; i++) { const a = (a0 + (a1 - a0) * i / n) * rad; p.push([CX + R6 * Math.cos(a), CY - R6 * Math.sin(a)]); } return p; };
 function lane(pts, sp, minor) {   // sp: cruising speed, tiles/s
   const cum = [0]; for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]));
+  const n = Math.max(1, Math.round(cum[cum.length - 1] / (minor ? 18 : 11)));
+  const out = ([x, y], [px, py]) => { if (x >= 0 && y >= 0 && x <= MW) return [x, y]; const d = Math.hypot(x - px, y - py) || 1; return [x + (x - px) / d * 8, y + (y - py) / d * 8]; };
+  pts = [out(pts[0], pts[1]), ...pts.slice(1, -1), out(pts[pts.length - 1], pts[pts.length - 2])];   // run on 8 tiles out of sight, so merging queues form off the map
+  for (let i = 1; i < pts.length; i++) cum[i] = cum[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
   const L = { pts, cum, len: cum[cum.length - 1], sp, cars: [], stops: [] };
   lanes.push(L);
-  const n = Math.max(1, Math.round(L.len / (minor ? 18 : 11)));
   for (let i = 0; i < n; i++) {
     const t = pick(minor ? ['car', 'taxi', 'trishaw', 'trishaw', 'car'] : ['car', 'car', 'car', 'taxi', 'taxi', 'bus', 'pickup']);
     const col = t === 'taxi' ? pick(['#F2F2EE', '#E9E9E4', '#F2F2EE', '#D23B3B']) : t === 'bus' ? pick(BUSC) : pick(CARC);
     const spr4 = {}; for (const d of 'EWSN') spr4[d] = vehicle(t, d, col);
-    const c = { k: 'veh', L, s: (i + rnd() * .5) / n * L.len, spr: spr4, r: rnd(), x: 0, y: 0, d: 'E', v: sp, hl: VDIM[t][0] / 12 };
+    const c = { k: 'veh', id: ents.length, L, s: (i + rnd() * .5) / n * L.len, spr: spr4, r: rnd(), x: 0, y: 0, ux: 0, uy: 0, d: 'E', v: sp, hl: VDIM[t][0] / 12 };
     ents.push(c); L.cars.push(c);
   }
 }
@@ -1024,11 +1027,12 @@ function populate() {
     else if (m) { lane([[x1 + 1, y0 + 1], [x0 - 1, y0 + 1]], 2.2); lane([[x0 - 1, y0 + 3], [x1 + 1, y0 + 3]], 2.2); }
     walkers(x0, y0 - .5, x1, y0 - .5); walkers(x0, y1 + .5, x1, y1 + .5);
   }
+  // main streets turn round just short of Strand Rd; one-way side streets only ever turn right onto or off its westbound side
   let alt = 0;
   for (const [x0, x1, y0, y1, m] of NS) {
-    if (x0 === 65) { lane([[66, -1], ...arc(98.5, 261.5), [66, 149], [-1, 149]], 2.2); lane([[-1, 151], [68, 151], ...arc(278.5, 441.5), [68, -1]], 2.2); }
-    else if (m) { lane([[x0 + 1, -1], [x0 + 1, 149], [-1, 149]], 2.2); lane([[-1, 151], [x0 + 3, 151], [x0 + 3, -1]], 2.2); }
-    else if (y1 >= 148) { const x = x0 + 1; lane(alt++ % 2 ? [[-1, 151], [x, 151], [x, -1]] : [[x, -1], [x, 149], [-1, 149]], 1.1, true); }
+    if (x0 === 65) lane([[66, -1], ...arc(98.5, 261.5), [66, 147], [68, 147], ...arc(278.5, 441.5), [68, -1]], 2.2);
+    else if (m) lane([[x0 + 1, -1], [x0 + 1, 147], [x0 + 3, 147], [x0 + 3, -1]], 2.2);
+    else if (y1 >= 148) { const x = x0 + 1; lane(alt++ % 2 ? [[MW + 1, 149], [x, 149], [x, -1]] : [[x, -1], [x, 149], [-1, 149]], 1.1, true); }
     walkers(x0 - .5, y0, x0 - .5, y1); walkers(x1 + (x0 === 126 ? .2 : .5), y0, x1 + (x0 === 126 ? .2 : .5), y1);   // Pansodan: keep off the books
   }
   walkers(84.5, 89, 84.5, 117, 6); walkers(70, 107.5, 99, 107.5, 6); walkers(0, 153.5, 120, 153.5, 7);
@@ -1409,11 +1413,12 @@ function setZoom(z, px = innerWidth / 2, py = innerHeight / 2) {
 
 function update(dt) {
   T += dt;
+  fillGrid();
   for (const L of lanes) drive(L, dt);
   for (const e of ents) {
     if (e.k === 'veh') {
       if (e.r > density) e.s = (e.s + e.L.sp * dt) % e.L.len;       // off-duty cars just drift along unseen
-      const [x, y, dx, dy] = lanePos(e.L, e.s); e.x = x; e.y = y; e.d = dirOf(dx, dy);
+      const [x, y, dx, dy] = lanePos(e.L, e.s), n = Math.hypot(dx, dy) || 1; e.x = x; e.y = y; e.d = dirOf(dx, dy); e.ux = dx / n; e.uy = dy / n;
     } else if (e.k === 'ped') {
       if (e.pause > 0) { e.pause -= dt; continue; }
       const ns = e.s + e.dir * e.sp * dt, [x, y] = linePt(e.l, ns);
@@ -1440,8 +1445,34 @@ function update(dt) {
 const signals = [];
 function light3(sig, axis) {                                      // 'g' | 'y' | 'r' for traffic along x ('h') or y ('v')
   const t = (T + sig.ph) % 52;
-  if (axis === 'h') return t < 22 ? 'g' : t < 25 ? 'y' : 'r';
+  if (axis === 'h') return t < 1 ? 'r' : t < 22 ? 'g' : t < 25 ? 'y' : 'r';   // 2 s all-red each change, to clear the box
   return t < 26 ? 'r' : t < 48 ? 'g' : t < 51 ? 'y' : 'r';
+}
+// cars on other lanes: each car holds the tiles under it (foot) plus the one it is about to drive into (claim, first
+// come first served); nobody drives into a tile another lane's car holds — unsignalled crossings, merges, the roundabout.
+const foot = new Map(), claim = new Map(), tk = (x, y) => Math.floor(x) * 1024 + Math.floor(y);
+function fillGrid() {
+  foot.clear(); claim.clear();
+  const cars = []; for (const L of lanes) for (const c of L.cars) if (c.r <= density) cars.push(c);
+  cars.sort((a, b) => a.id - b.id);
+  const at = (c, d) => { const [x, y] = lanePos(c.L, (c.s + d + c.L.len) % c.L.len); return tk(x, y); };
+  for (const c of cars) for (let d = -c.hl; d <= c.hl + .01; d += .25) { const k = at(c, d); if (!foot.has(k)) foot.set(k, c); }
+  for (const c of cars) { const k = at(c, c.hl + .5); if (!claim.has(k) && !foot.has(k)) claim.set(k, c); }
+}
+function blocker(c) {                                              // the other lane's car in, or holding, a tile just ahead
+  for (let d = c.hl + .05; d <= c.hl + 1.5; d += .25) {
+    const [x, y] = lanePos(c.L, (c.s + d) % c.L.len), k = tk(x, y);
+    const f = foot.get(k), o = claim.get(k);
+    if (f && f.L !== c.L) return [f, d, true];
+    if (o && o.L !== c.L) return [o, d, false];
+  }
+  return null;
+}
+function crossRoom(c) {
+  const b = blocker(c); if (!b) return Infinity;
+  const [o, d] = b, back = blocker(o);
+  if (back && back[0] === c && c.id < o.id) return Infinity;         // each waiting on the other: the older car goes
+  return d - c.hl - .3;
 }
 function drive(L, dt) {
   const cars = L.cars.filter(c => c.r <= density).sort((a, b) => a.s - b.s);
@@ -1449,30 +1480,43 @@ function drive(L, dt) {
     let room = Infinity;
     const ahead = cars[(i + 1) % cars.length];
     if (ahead !== c) { let d = ahead.s - c.s; if (d <= 0) d += L.len; room = d - c.hl - ahead.hl - .35; }
+    let inside = false;
     for (const st of L.stops) {
       let d = st.s - c.s; if (d < -.05) d += L.len;
-      if (d > 5) continue;
-      const col = light3(st.sig, st.axis);
-      if (col === 'r' || (col === 'y' && d - c.hl > .8)) room = Math.min(room, d - c.hl);
+      if (!st.tee && (c.s - st.s + L.len) % L.len < st.e - st.s + c.hl) inside = true;
+      if (d > 5 || d - c.hl < -.05) continue;                       // far off, or already in the crossing
+      let stop = false;
+      if (st.sig) { const col = light3(st.sig, st.axis); stop = col === 'r' || (col === 'y' && d - c.hl > .8); }
+      if (!stop && ahead !== c) {                                  // don't block the box: go only if there's room on the far side
+        let da = ahead.s - c.s, de = st.e - c.s; if (da <= 0) da += L.len; if (de < 0) de += L.len;
+        stop = da - ahead.hl < de + 2 * c.hl + .4;
+      }
+      if (stop) room = Math.min(room, d - c.hl);
     }
+    const cr = crossRoom(c); c.wait = cr < .1 && room > .1 ? (c.wait || 0) + dt : 0;
+    if (c.wait < 20 || !inside) room = Math.min(room, cr);       // ponytail: a rare knot of 3+ cars inside a crossroads — after 20 s the waiting one edges through
     const want = Math.min(L.sp, Math.max(0, room) * 1.3);          // ease off as the gap closes
     c.v = Math.max(0, Math.min(L.sp, c.v + Math.max(-5 * dt, Math.min(1.2 * dt, want - c.v))));
     c.s = (c.s + Math.min(c.v * dt, Math.max(0, room))) % L.len;
   });
 }
+const boxes = [];                                                 // every crossing; the main ones have lights
 function setupSignals() {
   for (const [y0, y1, ex0, ex1, em] of EW) for (const [x0, x1, ny0, ny1, nm] of NS) {
-    if (!em || !nm || x0 < ex0 || x1 > ex1 || ny0 > y0 || ny1 < y1 || rbd(x0, y0) < 12) continue;
+    if (x0 < ex0 || x1 > ex1 || ny0 > y0 || ny1 < y0) continue;   // crossings and T-junctions
+    const box = { x0, x1, y0, y1, sig: null, tee: ny1 < y1 }; boxes.push(box);
+    if (!em || !nm || ny1 < y1 || rbd(x0, y0) < 12) continue;
     const sig = { x0, x1, y0, y1, ph: V() * 52 };
-    signals.push(sig);
+    signals.push(sig); box.sig = sig;
     vig(x0 - .3, y1 + .3, [], { z: 0, draw: (e, X, Y) => drawSignal(sig, X, Y, e) });   // pole on the corner nearest us
   }
-  for (const L of lanes) {                                        // where each lane meets a signalled crossing
+  for (const L of lanes) {                                        // where each lane enters and leaves a crossing
     let inside = null;
     for (let s = 0; s < L.len; s += .25) {
-      const [x, y, dx, dy] = lanePos(L, s), sig = signals.find(g => x > g.x0 && x < g.x1 && y > g.y0 && y < g.y1) || null;
-      if (sig && sig !== inside) L.stops.push({ s: Math.max(0, s - .5), sig, axis: Math.abs(dx) > Math.abs(dy) ? 'h' : 'v' });
-      inside = sig;
+      const [x, y, dx, dy] = lanePos(L, s), box = boxes.find(g => x > g.x0 && x < g.x1 && y > g.y0 && y < g.y1) || null;
+      if (box && box !== inside) L.stops.push({ s: Math.max(0, s - .5), e: s, sig: box.sig, tee: box.tee, axis: Math.abs(dx) > Math.abs(dy) ? 'h' : 'v' });
+      if (box) L.stops[L.stops.length - 1].e = s + .25;
+      inside = box;
     }
   }
 }

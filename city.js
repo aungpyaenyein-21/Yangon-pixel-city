@@ -5,9 +5,9 @@
 // ── projection: 2:1 isometric, camera looks from the south-west ─────────────
 const HW = 12, HH = 6, FL = 10;              // half tile (1 tile ≈ 5 m), px per storey
 const MW = 134, MH = 176;                     // map in tiles: x → east, y → south
-const X0 = -28, Y0 = -30;                     // the map grew west and north (Bogyoke Market): tiles run X0..MW, Y0..MH
-const GW = MW - X0, GH = MH - Y0, SX0 = -(X0 + Y0) * HW;   // SX0 is even, so the 1-px column maths below stays exact
-const OY = (MW - Y0) * HH + 150;              // headroom for the towers near the NE corner
+const X0 = -28, Y0 = -44, XE = 146;           // the map grew west, north and east (Bogyoke Market, the Central Station): tiles run X0..XE, Y0..MH
+const GW = XE - X0, GH = MH - Y0, SX0 = -(X0 + Y0) * HW;   // SX0 is even, so the 1-px column maths below stays exact
+const OY = (XE - Y0) * HH + 150;              // headroom for the towers near the NE corner
 const CW = (GW + GH) * HW, CH = OY + (MH - X0) * HH + 40;
 const sx = (x, y) => Math.round((x + y) * HW) + SX0;
 const sy = (x, y, z = 0) => Math.round((y - x) * HH) + OY - z;
@@ -214,11 +214,11 @@ const LM = {
 
 const G = new Uint8Array(GW * GH), MAIN = new Uint8Array(GW * GH), HT = new Uint16Array(GW * GH);
 const ix = (x, y) => (y - Y0) * GW + (x - X0);
-let BX = 0, BY = 0;                           // the original map is built first as it always was; then the new strips (grow)
+let BX = 0, BY = 0, BE = MW;                           // the original map is built first as it always was; then the new strips (grow)
 const ROAD = 1, WALK = 2, GRASS = 3, WATER = 4, PATH = 5, PROM = 6, PLAZA = 7, RES = 8, LOT = 9, ISLE = 10, RAIL = 11, COBBLE = 12;
-const at = (x, y) => (x < BX || y < BY || x >= MW || y >= MH ? -1 : G[ix(x, y)]);
+const at = (x, y) => (x < BX || y < BY || x >= BE || y >= MH ? -1 : G[ix(x, y)]);
 const rbd = (x, y) => Math.hypot(x + .5 - CX, y + .5 - CY);
-function mark(x0, y0, x1, y1, h) { for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) if (x >= BX && y >= BY && x < MW && y < MH) HT[ix(x, y)] = h; }
+function mark(x0, y0, x1, y1, h) { for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) if (x >= BX && y >= BY && x < BE && y < MH) HT[ix(x, y)] = h; }
 // can the camera see a figure h px tall standing at (x, y)? walk the sight line towards the south-west
 function seen(x, y, h = 10, z = 1) {
   for (const o of [-.35, 0, .35]) for (let t = .5; t < 30; t += .5) {    // three sight lines ≈ a figure's width
@@ -229,7 +229,7 @@ function seen(x, y, h = 10, z = 1) {
   return true;
 }
 function fill(x0, y0, x1, y1, t, only) {
-  for (let y = Math.max(BY, y0); y < Math.min(MH, y1); y++) for (let x = Math.max(BX, x0); x < Math.min(MW, x1); x++) {
+  for (let y = Math.max(BY, y0); y < Math.min(MH, y1); y++) for (let x = Math.max(BX, x0); x < Math.min(BE, x1); x++) {
     const i = ix(x, y); if (only === undefined || G[i] === only) G[i] = t;
   }
 }
@@ -259,10 +259,10 @@ function layout() {
 // ── ground ───────────────────────────────────────────────────────────────────
 const GC = { 0: '#C3BBAA', [ROAD]: '#5B5E64', [WALK]: '#CEC6B4', [GRASS]: '#7DB64C', [WATER]: '#4E7F88', [PATH]: '#DCCFAE',
   [PROM]: '#C8BDA6', [PLAZA]: '#C3BBAA', [RES]: '#B9B1A1', [LOT]: '#8E877B', [ISLE]: '#E6DDC8', [RAIL]: '#7B7266', [COBBLE]: '#A99F8E' };
-const GZ = t => (t === ROAD ? 0 : t === WATER ? -5 : t === RAIL ? -6 : 1);
+const GZ = t => (t === ROAD ? 0 : t === WATER ? -5 : 1);
 function ground(g) {
   for (let y = Y0; y < MH; y++) {
-    for (let x = MW - 1; x >= X0;) {                    // east → west so the nearer tile wins
+    for (let x = XE - 1; x >= X0;) {                    // east → west so the nearer tile wins
       const t = G[ix(x, y)]; let a = x;
       while (a > X0 && G[ix(a - 1, y)] === t) a--;
       tF(g, a, y, x + 1, y + 1, GZ(t), GC[t]); x = a - 1;
@@ -279,6 +279,9 @@ function ground(g) {
       for (let k = 0; k < 4; k++) { const U = x + rnd(), V = y + rnd(); g.fillStyle = chance(.5) ? '#6CA23F' : '#94C862'; g.fillRect(sx(U, V), sy(U, V, 1) - 1, 1, 1); }
     } else if (t === WATER) {
       g.fillStyle = chance(.5) ? '#5C8E96' : '#44737B'; g.fillRect(sx(X, Y), sy(X, Y, -5), 4, 1);
+    } else if (t === RAIL) {                                          // ballast, and weeds between the tracks
+      g.fillStyle = chance(.5) ? '#6E655A' : '#8A8072'; g.fillRect(sx(X, Y), sy(X, Y, 1) - 1, 2, 1);
+      if (chance(.35)) { g.fillStyle = chance(.5) ? '#7FA05A' : '#6C8F48'; g.fillRect(sx(X, Y) + 3, sy(X, Y, 1) - 2, 1, 1); }
     } else if (t === COBBLE) {
       g.fillStyle = chance(.5) ? '#968C7C' : '#B8AE9C'; g.fillRect(sx(X, Y), sy(X, Y, 1) - 1, 2, 1);
     }
@@ -286,17 +289,17 @@ function ground(g) {
     const S = at(x, y + 1), W = at(x - 1, y);
     if (z > 0 && S === ROAD) sF(g, y + 1, x, x + 1, 0, 1, '#8B8475');
     if (z > 0 && W === ROAD) wF(g, x, y, y + 1, 0, 1, '#8B8475');
-    if (t === WATER || t === RAIL) {                                  // river walls, and the sides of the railway cutting
+    if (t === WATER) {                                                // river walls
       const N = at(x, y - 1), E = at(x + 1, y);
       if (N >= 0 && N !== t) sF(g, y, x, x + 1, z, 1, '#6E675C');
       if (E >= 0 && E !== t) wF(g, x + 1, y, y + 1, z, 1, '#7C7468');
     }
   };
   for (let y = 0; y < MH; y++) for (let x = 0; x < MW; x++) detail(x, y);
-  withSeed(1926, () => { for (let y = Y0; y < MH; y++) for (let x = X0; x < MW; x++) if (x < 0 || y < 0) detail(x, y); });
+  withSeed(1926, () => { for (let y = Y0; y < MH; y++) for (let x = X0; x < XE; x++) if (x < 0 || y < 0 || x >= MW) detail(x, y); });
   // lane markings and zebra crossings
   const paint = '#DCD9CC';
-  for (const [y0, y1, x0, x1, m] of EW) if (m) for (let x = x0 ? x0 : X0; x < x1; x++) {
+  for (const [y0, y1, x0, x1, m] of EW) if (m) for (let x = x0 ? x0 : X0; x < (x1 === MW ? XE : x1); x++) {
     if (at(x, y0 - 1) === ROAD || at(x, y1) === ROAD || rbd(x, y0 + 2) < 10) continue;
     g.fillStyle = paint; for (let c = sx(x, y0 + 2), e = sx(x + .5, y0 + 2); c < e; c++) g.fillRect(c, bs(c, y0 + 2), 1, 1);
   }
@@ -881,9 +884,9 @@ function vehicle(type, dir, col) {
 // ── build everything ─────────────────────────────────────────────────────────
 function blocks() {
   const seen = new Uint8Array(GW * GH), out = [];
-  for (let sy0 = BY; sy0 < MH; sy0++) for (let sx0 = BX; sx0 < MW; sx0++) {
+  for (let sy0 = BY; sy0 < MH; sy0++) for (let sx0 = BX; sx0 < BE; sx0++) {
     if (seen[ix(sx0, sy0)] || at(sx0, sy0) !== 0) continue;
-    let x0 = MW, y0 = MH, x1 = BX, y1 = BY; const st = [[sx0, sy0]]; seen[ix(sx0, sy0)] = 1;
+    let x0 = BE, y0 = MH, x1 = BX, y1 = BY; const st = [[sx0, sy0]]; seen[ix(sx0, sy0)] = 1;
     while (st.length) {
       const [x, y] = st.pop();
       x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y);
@@ -894,7 +897,7 @@ function blocks() {
   return out;
 }
 const isFree = (x0, y0, x1, y1) => { for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) if (at(x, y) !== 0) return false; return true; };
-const nearMain = (x, y) => x >= BX && y >= BY && x < MW && y < MH && MAIN[ix(x | 0, y | 0)] === 1;
+const nearMain = (x, y) => x >= BX && y >= BY && x < BE && y < MH && MAIN[ix(x | 0, y | 0)] === 1;
 function building(x0, y0, x1, y1) {
   const mx = (x0 + x1) >> 1, my = (y0 + y1) >> 1;
   const stW = at(x0 - 1, my) === WALK, stS = at(mx, y1) === WALK;
@@ -975,11 +978,13 @@ function props() {
 // ── the map grown west and north of the original: Bogyoke Market, the railway, Junction City ──
 // Everything above is the original map, built exactly as before; grow() then drops what stood north of
 // Bogyoke Rd (side streets end at Bogyoke Rd there) and fills the new strips with their own dice.
-const KEEP = [[65, 69], [126, 130]];                               // Sule Pagoda Rd and Pansodan St carry on north
+const KEEP = [[65, 69]];                                           // Sule Pagoda Rd carries on north (over the railway)
 const MKT = [-20, -22, 18, 3];                                     // Bogyoke Market inside its fence (OSM, 1 tile ≈ 5 m)
 const RAILY = [-26, -22], HQ = [43, -8, 60, 5], JC = [X0, 11, -13, 22], CATH = [X0, -21, MKT[0], 5];
 const NS2 = [[-12, -10, 10, 148, '၂၇ လမ်း', '27TH ST'], [-4, -2, 10, 148, '၂၈ လမ်း', '28TH ST']];
-const BACKLANES = [26, 36, 83, 91, 100, 109, 118];                 // narrow lanes between the new blocks north of Bogyoke Rd
+const BACKLANES = [26, 36];                                        // narrow lanes between the new blocks north of Bogyoke Rd
+// Yangon Central (1954), OSM: the station building on the north side of the tracks, its forecourt on Kun Chan Rd
+const STN = 69, BOOK = [77, -2, 110, 5], STB = [99, -33.3, 134.2, -26.3], KUN = [-41, -39];
 // Bogyoke Aung San Market (1926): a long two-storey front in cream with terracotta roofs, a clock tower with a
 // dome over the main gate, arched end pavilions; behind it a grid of green tin-roofed sheds on cobbled lanes
 const MK = { wall: '#EFE2C4', trim: '#FFF6E2', roof: '#B84A32', arch: '#A8432C', dark: '#3A2E28', glass: '#3E4A56' };
@@ -1058,33 +1063,70 @@ function market() {
   sF(fg2, 3.1, MKT[0], MKT[2], 5, 6, '#2F4A3A');
   for (let x = MKT[0] + 1; x < MKT[2] - 1; x += 1.6) if (chance(.45) && (x < TOWER[0] - 1 || x > TOWER[2] + .5)) parked(x + .6, 4, chance(.5) ? 'E' : 'W', chance(.6) ? 'taxi' : 'car');
 }
-// the railway along the north edge: two tracks in a shallow cutting, road bridges at Sule Pagoda Rd and Pansodan St,
-// the wooden footbridge behind the market; trains of the main line and the Circle Line pass all day
-const TRACKS = [-25.1, -23.5], bridges = [];
+// the railway along the north edge, at grade: two main tracks behind the market fan out east of Sule Pagoda Rd into
+// Yangon Central — four platforms, the carriage yard down to Bogyoke Rd; the roads fly over (OSM)
+const TMAIN = [-22.6, -24.8];                                       // the two main lines (also platform 2/3's tracks)
+const TRK = [                                                       // every track as a polyline, west → east
+  [[X0 - 40, TMAIN[0]], [XE + 40, TMAIN[0]]], [[X0 - 40, TMAIN[1]], [XE + 40, TMAIN[1]]],
+  [[71, -15.9], [XE + 40, -15.9]], [[60, TMAIN[0]], [70, -18.2], [XE + 40, -18.2]],   // platform 6/7 (the Circle Line's), with its turnout
+  [[71, -18.9], [XE + 40, -18.9]], [[71, -21.2], [XE + 40, -21.2]],
+  ...Array.from({ length: 10 }, (_, k) => [[74 + (k % 4) * 2, -14.6 + k * 1.2], [XE + 40, -14.6 + k * 1.2]]),   // the carriage yard
+];
+const trackLen = pts => pts.slice(1).reduce((a, p, i) => a + Math.hypot(p[0] - pts[i][0], p[1] - pts[i][1]), 0);
+function onTrack(pts, s) {                                          // → [x, y] at distance s along a track
+  for (let i = 1; i < pts.length; i++) {
+    const [ax, ay] = pts[i - 1], [bx, by] = pts[i], l = Math.hypot(bx - ax, by - ay);
+    if (s <= l || i === pts.length - 1) { const t = Math.max(0, Math.min(1, s / l)); return [ax + (bx - ax) * t, ay + (by - ay) * t]; }
+    s -= l;
+  }
+}
 function railway() {
   decals.push(g => {
-    for (const t of TRACKS) for (let x = X0; x < MW; x += 1 / 3) {
-      if (at(Math.floor(x), Math.floor(t)) !== RAIL) continue;
-      tF(g, x, t - .32, x + 1 / 12, t + .32, -5, '#5E5046');                                        // sleepers
+    for (const pts of TRK) {
+      const L = trackLen(pts);
+      for (let d = 0; d < L; d += 1 / 3) { const [x, y] = onTrack(pts, d); if (at(Math.floor(x), Math.floor(y)) === RAIL) tF(g, x - .04, y - .3, x + .04, y + .3, 1, '#5E5046'); }   // sleepers
+      for (let d = 0; d < L; d += 1 / 12) { const [x, y] = onTrack(pts, d); if (at(Math.floor(x), Math.floor(y)) === RAIL) for (const r of [-.2, .2]) tF(g, x - .05, y + r - .04, x + .05, y + r + .04, 2, '#A3A3A6'); }
     }
-    for (const t of TRACKS) for (let x = X0; x < MW; x++) if (at(x, Math.floor(t)) === RAIL) for (const r of [-.2, .2]) tF(g, x, t + r - .04, x + 1, t + r + .04, -4, '#A3A3A6');
   });
-  for (const [a, b] of KEEP) {                                    // the road over the cutting: redrawn over a passing train
-    const [y0, y1] = RAILY, s = spr(a, y0, b, y1, 12, 4, false), g = s.g;
-    wF(g, a, y0, y1, -6, 0, '#9B9384'); tF(g, a, y0, b, y1, 0, GC[ROAD]);
-    box(g, a, y0, b, y0 + .15, 0, 4, '#C9C3B6'); box(g, a, y1 - .15, b, y1, 0, 4, '#C9C3B6');
-    bridges.push(s);
-    const p = spr(a, y1 - .15, b, y1, 8, 2); box(p.g, a, y1 - .15, b, y1, 0, 4, '#C9C3B6');   // the near parapet, in front of cars
-  }
+  for (const pts of TRK.slice(2)) { const [x, y] = pts[0]; if (x > 65) { const s = spr(x - .3, y - .3, x, y + .3, 10, 2); box(s.g, x - .3, y - .3, x, y + .3, 0, 5, '#8E2F24', '#B23A2C'); } }   // buffer stops
   // the wooden footbridge over the tracks behind the market (OSM), steps at both ends
   const x0 = 10.2, x1 = 10.9, H = 24, deck = spr(x0, -27.6, x1, -20.6, H + 8, 2), g = deck.g; deck.above = true;
   box(g, x0, -27.6, x1, -20.6, H, H + 2, '#8A6440', '#9C744C');
   box(g, x1 - 1 / 12, -27.6, x1, -20.6, H + 2, H + 6, '#6B4A2E'); box(g, x0, -27.6, x0 + 1 / 12, -20.6, H + 2, H + 6, '#6B4A2E');
-  for (const y of [-27.4, -24.3, -21.2]) { const p = spr(x0, y, x1, y + .12, H + 2, 2); box(p.g, x0 + .05, y, x0 + .15, y + .12, -6, H, '#6B4A2E'); box(p.g, x1 - .15, y, x1 - .05, y + .12, -6, H, '#6B4A2E'); }
+  for (const y of [-27.4, -24.3, -21.2]) { const p = spr(x0, y, x1, y + .12, H + 2, 2); box(p.g, x0 + .05, y, x0 + .15, y + .12, 0, H, '#6B4A2E'); box(p.g, x1 - .15, y, x1 - .05, y + .12, 0, H, '#6B4A2E'); }
   for (const [ya, dir] of [[-20.6, 1], [-27.6, -1]]) {
     const n = 10, d = .3, s = spr(x0, dir > 0 ? ya : ya - n * d, x1, dir > 0 ? ya + n * d : ya, H + 4, 2);
     const order = [...Array(n).keys()]; if (dir < 0) order.reverse();
     for (const i of order) { const a = dir > 0 ? ya + i * d : ya - (i + 1) * d, z = Math.round(H - (i + 1) * H / n); box(s.g, x0, a, x1, a + d, 0, Math.max(1, z), '#8A6440', '#9C744C'); }
+  }
+}
+// the two flyovers over the railway: Sule Pagoda Rd (straight) and Pansodan (curving east past the station, OSM)
+const DECK = 26;
+const PB = [[136.8, Y0 - 12], [136.8, -38.7], [136.4, -25.6], [135.2, -16.5], [129.7, -5], [128, 5]];   // Pansodan's centreline, north → south
+function pbX(y) {
+  if (y >= PB[PB.length - 1][1]) return 128;
+  for (let i = 1; i < PB.length; i++) { const [ax, ay] = PB[i - 1], [bx, by] = PB[i]; if (y >= ay && y <= by) return ax + (bx - ax) * (y - ay) / (by - ay); }
+  return PB[0][0];
+}
+const suleZ = y => (y > -4 || y < -38 ? 0 : y > -14 ? DECK * (-4 - y) / 10 : y >= -28 ? DECK : DECK * (y + 38) / 10);
+const pansZ = y => (y > 5 ? 0 : y > -3 ? DECK * (5 - y) / 8 : DECK);
+function elev(x, y) {                                               // the road's height under a car
+  if (x > 64.5 && x < 69.5) return suleZ(y);
+  if (y < 5.5 && Math.abs(x - pbX(y)) < 2.6) return pansZ(y);
+  return 0;
+}
+function flyover(cxAt, zAt, ya, yb, lotus) {                        // half-tile slabs from ya north to yb
+  for (let y = ya; y > yb; y -= .5) {
+    const cx = q12(cxAt(y - .25)), z = Math.round(zAt(y - .25)), x0 = cx - 2, x1 = cx + 2, a = y - .5;
+    if (z < 1) continue;
+    const up = z >= DECK - 1, s = spr(x0, a, x1, y, z + 10, 3), g = s.g; s.fly = true; s.above = up;
+    if (up) box(g, x0, a, x1, y, z - 4, z, '#B8B2A6', GC[ROAD]); else box(g, x0, a, x1, y, 0, z, '#C4BDAF', GC[ROAD]);   // deck slab / the ramp's solid fill
+    if (Math.round(y * 2) % 2) tF(g, cx - .04, a + .1, cx + .04, a + .35, z, '#DCD9CC');                             // centre line
+    for (const [p, q] of [[x0, x0 + .1], [x1 - .1, x1]]) {
+      box(g, p, a, q, y, z, z + 4, '#ECE8DE', '#F6F3EC');
+      if (lotus && Math.round(y * 2) % 4 === 0) lathe(g, (p + q) / 2, a + .25, z + 4, 3, t => .08 * (1 - t / 3) + .02, GOLD, GOLD[0]);   // lotus-bud finials
+    }
+    if (up && Math.round(y * 2) % 6 === 0) { const pl = spr(cx - .3, a, cx + .3, a + .4, z, 2); box(pl.g, cx - .3, a, cx + .3, a + .4, 0, z - 4, '#ABA59A'); }   // piers
   }
 }
 const trains = [];
@@ -1096,20 +1138,25 @@ function trainSet(col, band) {                                     // one carria
     box(g, -1.55, -.3, 1.55, .3, 14, 16, '#8E949A', '#A9AEB3');
   });
 }
+// a train: cars along a track; at(T) → distance of the lead car along the track (or null when away)
+function addTrain(track, cars, at) { trains.push({ pts: TRK[track], L: trackLen(TRK[track]), cars, at }); }
 function railLife() {
-  const sets = [[trainSet('#2C4E8A', '#1E2A38'), 5, 2.6, 0], [trainSet('#8E2F24', '#2A2020'), 6, 2.2, 1]];   // Circle Line blue, main line maroon
-  sets.forEach(([car, n, v, k]) => trains.push({ car, n, v: k ? -v : v, y: TRACKS[k], ph: V() * 400, x: 0 }));
+  const blue = trainSet('#2C4E8A', '#1E2A38'), maroon = trainSet('#8E2F24', '#2A2020');
+  for (const [k, car, n, v] of [[0, blue, 5, 2.6], [1, maroon, 6, -2.2]]) {
+    const L = trackLen(TRK[k]) + 30, ph = V() * L;
+    addTrain(k, Array(n).fill(car), () => { const s = ((T * v + ph) % L + L) % L; return v > 0 ? s : L - 30 - s; });
+  }
 }
 function drawTrains(X, Y) {
   if (!inWin(mins, [320, 1350])) return;
   for (const t of trains) {
-    const span = GW + 60, x = X0 - 30 + (((T * t.v + t.ph) % span) + span) % span;
-    for (let i = 0; i < t.n; i++) {
-      const cx = x - Math.sign(t.v) * i * 3.35, px = sx(cx, t.y), py = sy(cx, t.y, -5);   // on the rails, down in the cutting
-      if (px < X - 60 || px > X + vw + 60 || py < Y - 60 || py > Y + vh + 60) continue;
-      drawEnt(t.car, px - t.car.ax, py - t.car.ay, cx, t.y);
-      for (const b of bridges) if (Math.abs(cx - (b.x0 + b.x1) / 2) < 4) fg.drawImage(b.cv, b.left, b.top);
-    }
+    const s0 = t.at(); if (s0 == null) continue;
+    t.cars.forEach((car, i) => {
+      const s = s0 - i * 3.35; if (s < 0 || s > t.L) return;
+      const [x, y] = onTrack(t.pts, s), px = sx(x, y), py = sy(x, y, 1);
+      if (px < X - 60 || px > X + vw + 60 || py < Y - 60 || py > Y + vh + 60) return;
+      drawEnt(car, px - car.ax, py - car.ay, x, y);
+    });
   }
 }
 function railwayHQ() {                                             // the Myanma Railways headquarters (1896): red brick, white trim
@@ -1215,36 +1262,50 @@ function marketLife() {
   clockHands();
 }
 function grow() {
-  BX = X0; BY = Y0;
+  BX = X0; BY = Y0; BE = XE;
   for (let i = sprites.length - 1; i >= 0; i--) if (sprites[i].y1 <= 5.01) sprites.splice(i, 1);
   for (let i = ents.length - 1; i >= 0; i--) if (ents[i].y < 5) ents.splice(i, 1);
   for (let i = upper.length - 1; i >= 0; i--) if (upper[i].y1 <= 5.01) upper.splice(i, 1);
   for (let y = 0; y < 5; y++) for (let x = 0; x < MW; x++) { const i = ix(x, y); G[i] = MAIN[i] = HT[i] = 0; }
-  const kept = x => KEEP.some(([a, b]) => x >= a && x < b);
-  for (let x = 0; x < MW; x++) if (at(x, 5) === ROAD && !kept(x)) G[ix(x, 5)] = WALK;
-  for (const [y0, y1, x0, x1, m] of EW) if (x0 === 0) { fill(X0, y0, 0, y1, ROAD); if (m) for (let y = y0; y < y1; y++) for (let x = X0; x < 0; x++) MAIN[ix(x, y)] = 1; }
+  for (let x = 0; x < MW; x++) if (at(x, 5) === ROAD && !(x >= 65 && x < 69) && !(x >= 126 && x < 130)) G[ix(x, 5)] = WALK;   // side streets end at Bogyoke Rd
+  for (const [y0, y1, x0, x1, m] of EW) {                           // the through roads carry on west and east
+    const spans = (x0 === 0 ? [[X0, 0]] : []).concat(x1 === MW ? [[MW, XE]] : []);
+    for (const [a, b] of spans) { fill(a, y0, b, y1, ROAD); if (m) for (let y = y0; y < y1; y++) for (let x = a; x < b; x++) MAIN[ix(x, y)] = 1; }
+  }
   for (const [a, b] of KEEP) { fill(a, Y0, b, 5, ROAD); for (let y = Y0; y < 5; y++) for (let x = a; x < b; x++) MAIN[ix(x, y)] = 1; }
   for (const [x0, x1, y0, y1] of NS2) fill(x0, y0, x1, y1, ROAD);
-  for (let y = 152; y < MH; y++) for (let x = X0; x < 0; x++) { const i = ix(x, y); if (y >= 155) G[i] = WATER; else if (!G[i]) G[i] = PROM; }
-  fill(X0, RAILY[0], MW, RAILY[1], RAIL); for (const [a, b] of KEEP) fill(a, RAILY[0], b, RAILY[1], ROAD);
-  fill(X0, Y0, MW, RAILY[0], GRASS, 0);                             // the railway embankment beyond the tracks
+  for (let y = 152; y < MH; y++) for (let x = X0; x < XE; x++) { if (x >= 0 && x < MW) continue; const i = ix(x, y); if (y >= 155) G[i] = WATER; else if (!G[i]) G[i] = PROM; }
+  // the railway: two tracks behind the market, the station and its yard east of Sule Pagoda Rd
+  fill(X0, RAILY[0], 65, RAILY[1], RAIL);
+  fill(STN, -27, XE, 5, RAIL);
+  fill(65, -28, 69, -14, RAIL); fill(65, -14, 69, -4, RES); fill(65, -38, 69, -28, RES);   // Sule Pagoda Rd: on piers over the tracks, on solid ramps either side
+  for (let y = Y0; y < 5; y++) { const c = pbX(y + .5); for (let x = Math.floor(c - 2); x < Math.ceil(c + 2); x++) if (at(x, y) >= 0) G[ix(x, y)] = y >= -3 ? RES : at(x, y) === RAIL ? RAIL : PLAZA; }   // under Pansodan
+  fill(...BOOK, RES); fill(99, -34, 135, -26, RES);                  // the advance booking office; the station building
+  fill(STN, KUN[0], 130, KUN[1], ROAD); fill(130, Y0, 132, KUN[1], ROAD);   // Kun Chan Rd, turning north beside the flyover
+  fill(96, -38, 134, -34, LOT, 0);                                   // the forecourt and car park
+  for (const [a, b] of [[101, 106], [110, 123], [127, 132]]) fill(a, -38, b, -36, GRASS);   // its three lawns
+  fill(STN, Y0, 130, KUN[0], GRASS, 0); fill(132, Y0, XE, -27, GRASS, 0);   // the stadium's grounds; around the flyover
+  fill(X0, -27, 65, RAILY[0], GRASS, 0);                             // the embankment beyond the tracks
+  fill(X0, -35, 65, -33, ROAD); fill(-5, Y0, -3, -27, ROAD);         // Yawmingyi St, Bo Ya Nyunt St
   fill(MKT[0], MKT[1], MKT[2], MKT[3], RES); fill(MKT[0], MKT[3], MKT[2], 5, LOT);   // the market, and its parking strip
   fill(...CATH, GRASS, 0); fill(...HQ, RES); fill(...JC, RES);
   for (const x of BACKLANES) fill(x, RAILY[1], x + 1, 5, WALK, 0);
-  fill(X0, RAILY[1], MW, RAILY[1] + 1, WALK, 0);                   // a lane along the railway fence
+  fill(X0, RAILY[1], 65, RAILY[1] + 1, WALK, 0);                   // a lane along the railway fence
   const side = [];                                                  // sidewalks, as in layout()
-  for (let y = Y0; y < MH; y++) for (let x = X0; x < MW; x++) {
-    if ((x >= 0 && y >= 5) || G[ix(x, y)]) continue;
+  for (let y = Y0; y < MH; y++) for (let x = X0; x < XE; x++) {
+    if ((x >= 0 && x < MW && y >= 5) || G[ix(x, y)]) continue;
     for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if (at(x + dx, y + dy) === ROAD) { side.push(ix(x, y)); dy = dx = 2; }
   }
   for (const i of side) G[i] = WALK;
   withSeed(1926, () => {
     market(); railway(); railwayHQ(); junctionCity(); overpass();
+    flyover(() => 67, suleZ, -4, -38, false); flyover(pbX, pansZ, 5, Y0 - 2, true);
     for (let n = 0; n < 40; n++) { const x = CATH[0] + .5 + rnd() * (CATH[2] - CATH[0] - 1), y = CATH[1] + .5 + rnd() * (CATH[3] - CATH[1] - 1.5); if (free1(x, y)) tree(q12(x), q12(y), 1 + rnd() * .6); }   // Holy Trinity's grounds
-    lots(); fill(X0, Y0, MW, MH, PLAZA, 0);
+    lots(); fill(X0, Y0, XE, MH, PLAZA, 0);
     for (let x = -3; x > X0; x -= 5) { tree(x + .5, 153.5, 1 + rnd() * .4); lamp(x - 2, 154.4); }
-    railing(X0, 0);
-    for (const [y0, y1, x0, x1, m] of EW) if (m && x0 === 0) for (let x = X0 + 3; x < 0; x += 8) for (const y of [y0 - 1, y1]) if (at(x, y) === WALK && free1(x, y)) lamp(x + .5, y + .5);
+    for (let x = MW + 2; x < XE; x += 5) { tree(x + .5, 153.5, 1 + rnd() * .4); lamp(x + 2.5, 154.4); }
+    railing(X0, 0); railing(MW, XE);
+    for (const [y0, y1, x0, x1, m] of EW) if (m) for (const [a, b] of (x0 === 0 ? [[X0, 0]] : []).concat(x1 === MW ? [[MW, XE]] : [])) for (let x = a + 3; x < b; x += 8) for (const y of [y0 - 1, y1]) if (at(x, y) === WALK && free1(x, y)) lamp(x + .5, y + .5);
     for (const [a] of KEEP) for (let y = Y0 + 2; y < 5; y += 8) for (const x of [a - 1, a + 4]) if (at(x, y) === WALK && free1(x, y)) lamp(x + .5, y + .5);
   });
 }
@@ -1278,7 +1339,7 @@ const arc = (a0, a1) => { const p = [], n = Math.ceil((a1 - a0) / 12); for (let 
 function lane(pts, sp, minor) {   // sp: cruising speed, tiles/s
   const cum = [0]; for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]));
   const n = Math.max(1, Math.round(cum[cum.length - 1] / (minor ? 18 : 11)));
-  const out = ([x, y], [px, py]) => { if (x >= X0 && y >= Y0 && x <= MW) return [x, y]; const d = Math.hypot(x - px, y - py) || 1; return [x + (x - px) / d * 8, y + (y - py) / d * 8]; };
+  const out = ([x, y], [px, py]) => { if (x >= X0 && y >= Y0 && x <= XE) return [x, y]; const d = Math.hypot(x - px, y - py) || 1; return [x + (x - px) / d * 8, y + (y - py) / d * 8]; };
   pts = [out(pts[0], pts[1]), ...pts.slice(1, -1), out(pts[pts.length - 1], pts[pts.length - 2])];   // run on 8 tiles out of sight, so merging queues form off the map
   for (let i = 1; i < pts.length; i++) cum[i] = cum[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
   const L = { pts, cum, len: cum[cum.length - 1], sp, cars: [], stops: [] };
@@ -1313,8 +1374,8 @@ function addWalker(l, kind, s, bowl) {
 }
 function populate() {
   for (const [y0, y1, x0, x1, m] of EW) {
-    if (y0 === 84) { lane([[MW + 1, 85], ...arc(8.5, 171.5), [X0 - 1, 85]], 2.2); lane([[X0 - 1, 87], ...arc(188.5, 351.5), [MW + 1, 87]], 2.2); }
-    else if (m) { const w = (x0 || X0) - 1; lane([[x1 + 1, y0 + 1], [w, y0 + 1]], 2.2); lane([[w, y0 + 3], [x1 + 1, y0 + 3]], 2.2); }
+    if (y0 === 84) { lane([[XE + 1, 85], ...arc(8.5, 171.5), [X0 - 1, 85]], 2.2); lane([[X0 - 1, 87], ...arc(188.5, 351.5), [XE + 1, 87]], 2.2); }
+    else if (m) { const w = (x0 || X0) - 1, e = (x1 === MW ? XE : x1) + 1; lane([[e, y0 + 1], [w, y0 + 1]], 2.2); lane([[w, y0 + 3], [e, y0 + 3]], 2.2); }
     walkers(x0, y0 - .5, x1, y0 - .5); walkers(x0, y1 + .5, x1, y1 + .5);
   }
   // main streets turn round just short of Strand Rd (and Shwe Bon Thar short of Bogyoke Rd); one-way side streets only ever
@@ -1322,8 +1383,12 @@ function populate() {
   let alt = 0;
   for (const [x0, x1, y0, y1, m] of NS) {
     if (x0 === 65) lane([[66, Y0 - 1], ...arc(98.5, 261.5), [66, 147], [68, 147], ...arc(278.5, 441.5), [68, Y0 - 1]], 2.2);
+    else if (x0 === 126) {                                        // Pansodan: up the flyover past the station and away north
+      const north = PB.slice(0, -1);
+      lane([...north.map(([x, y]) => [x - 1, y]), [127, 5], [127, 147], [129, 147], [129, 5], ...north.reverse().map(([x, y]) => [x + 1, y])], 2.2);
+    }
     else if (m) { const top = KEEP.some(([a]) => a === x0) ? Y0 - 1 : 11.5; lane([[x0 + 1, top], [x0 + 1, 147], [x0 + 3, 147], [x0 + 3, top], ...(top > 0 ? [[x0 + 1, top]] : [])], 2.2); }
-    else if (y1 >= 148) { const x = x0 + 1; lane(alt++ % 2 ? [[MW + 1, 149], [x, 149], [x, 9], [MW + 1, 9]] : [[X0 - 1, 9], [x, 9], [x, 149], [X0 - 1, 149]], 1.1, true); }
+    else if (y1 >= 148) { const x = x0 + 1; lane(alt++ % 2 ? [[XE + 1, 149], [x, 149], [x, 9], [XE + 1, 9]] : [[X0 - 1, 9], [x, 9], [x, 149], [X0 - 1, 149]], 1.1, true); }
     walkers(x0 - .5, y0, x0 - .5, y1); walkers(x1 + (x0 === 126 ? .2 : .5), y0, x1 + (x0 === 126 ? .2 : .5), y1);   // Pansodan: keep off the books
   }
   walkers(84.5, 89, 84.5, 117, 6); walkers(70, 107.5, 99, 107.5, 6); walkers(0, 153.5, 120, 153.5, 7);
@@ -1709,7 +1774,7 @@ function update(dt) {
   for (const e of ents) {
     if (e.k === 'veh') {
       if (e.r > density) e.s = (e.s + e.L.sp * dt) % e.L.len;       // off-duty cars just drift along unseen
-      const [x, y, dx, dy] = lanePos(e.L, e.s), n = Math.hypot(dx, dy) || 1; e.x = x; e.y = y; e.d = dirOf(dx, dy); e.ux = dx / n; e.uy = dy / n;
+      const [x, y, dx, dy] = lanePos(e.L, e.s), n = Math.hypot(dx, dy) || 1; e.x = x; e.y = y; e.d = dirOf(dx, dy); e.ux = dx / n; e.uy = dy / n; e.z = y < 6 ? elev(x, y) : 0;
     } else if (e.k === 'ped') {
       if (e.pause > 0) { e.pause -= dt; continue; }
       const ns = e.s + e.dir * e.sp * dt, [x, y] = linePt(e.l, ns);
@@ -1725,11 +1790,11 @@ function update(dt) {
     } else if (e.k === 'vig') {
       if (e.tick) e.tick(e);
     } else if (e.k === 'boat') {
-      e.x += e.v * dt; if (e.x > MW + 3) e.x = X0 - 3; if (e.x < X0 - 3) e.x = MW + 3;
+      e.x += e.v * dt; if (e.x > XE + 3) e.x = X0 - 3; if (e.x < X0 - 3) e.x = XE + 3;
     }
   }
   for (const b of birds) b.a += b.w * dt;
-  for (const c of crows) { c.x += c.vx * dt; c.y += c.vy * dt; if (c.x > MW + 5) { c.x = X0 - 5; c.y = Y0 + rnd() * 180; } if (c.y < 0 || c.y > 160) c.vy = -c.vy; }
+  for (const c of crows) { c.x += c.vx * dt; c.y += c.vy * dt; if (c.x > XE + 5) { c.x = X0 - 5; c.y = Y0 + rnd() * 190; } if (c.y < 0 || c.y > 160) c.vy = -c.vy; }
 }
 
 // ── traffic lights at the main crossings: cars slow down, stop at red and queue ──
@@ -1829,17 +1894,18 @@ function drawSignal(sig, X, Y, e) {
   } }, X - 5, Y - 36, e.x, e.y);
 }
 
-function behind(ex, ey, s) {
+function behind(ex, ey, s, ez = 0) {
+  if (s.fly && ez > 0) return false;               // a car up on a flyover is on its deck, never under it
   if (s.above) return true;                        // bridge decks: anything they overlap on screen is under or behind them
   if (s.round) return ey - ex < CY - CX;
   if (ex >= s.x0 && ex <= s.x1 && ey >= s.y0 && ey <= s.y1) return ey - ex < (s.y0 + s.y1 - s.x0 - s.x1) / 2;
   return ex > s.x0 && ey < s.y1;
 }
-function drawEnt(img, dx, dy, ex, ey) {           // draw, then redraw whatever should hide it
+function drawEnt(img, dx, dy, ex, ey, ez = 0) {   // draw, then redraw whatever should hide it
   if (img.paint) img.paint(fg, dx, dy); else fg.drawImage(img, dx, dy);
   let clip = false;
   for (const s of drawList) {
-    if (s.left >= dx + img.width || s.left + s.w <= dx || s.top >= dy + img.height || s.top + s.h <= dy || !behind(ex, ey, s)) continue;
+    if (s.left >= dx + img.width || s.left + s.w <= dx || s.top >= dy + img.height || s.top + s.h <= dy || !behind(ex, ey, s, ez)) continue;
     if (!clip) { fg.save(); fg.beginPath(); fg.rect(dx, dy, img.width, img.height); fg.clip(); clip = true; }
     fg.drawImage(s.cv, s.left, s.top);
   }
@@ -1869,8 +1935,8 @@ function render() {
     const px = sx(e.x, e.y), py = sy(e.x, e.y);
     if (py < Y - 40 || py > Y + vh + 40) continue;
     if (e.k === 'veh' || e.k === 'boat') {
-      const v = e.k === 'veh' ? e.spr[e.d] : e.spr, dx = px + v.dx, dy = py + v.dy;
-      if (!drawEnt(v.cv, dx, dy, e.x, e.y) && v.ecv) lights.push([v.ecv, dx, dy]);
+      const v = e.k === 'veh' ? e.spr[e.d] : e.spr, z = e.z || 0, dx = px + v.dx, dy = py + v.dy - Math.round(z);
+      if (!drawEnt(v.cv, dx, dy, e.x, e.y, z) && v.ecv) lights.push([v.ecv, dx, dy]);
     } else if (e.k === 'ped') {
       const vx = e.l.ring ? -Math.sin(e.s / 9.1) * e.dir : (e.l.bx - e.l.ax) * e.dir, vy = e.l.ring ? Math.cos(e.s / 9.1) * e.dir : (e.l.by - e.l.ay) * e.dir;
       const img = e.spr.f[vx < 0 || vy > 0 ? 0 : 1][e.pause > 0 ? 0 : Math.floor(T * 4 + e.ph) % 2];

@@ -1342,7 +1342,7 @@ function platforms() {
   for (const [y0, y1, x0, x1] of PLAT) {
     const p = spr(x0, y0, x1, y1, 6, 2); box(p.g, x0, y0, x1, y1, 0, 3, '#B9B2A4', '#D6D0C3');
     for (const y of [y0 + .05, y1 - .13]) tF(p.g, x0, y, x1, y + .08, 3, '#E5C23A');                     // the yellow edge lines
-    const c1 = Math.min(x1, 133.2), m = (y0 + y1) / 2, cv = spr(x0 + .5, y0 - .15, c1, y1 + .15, 30, 2), g = cv.g, e = glow(cv);   // the canopy stops short of Pansodan's flyover
+    const c1 = Math.min(x1, 133.2), m = (y0 + y1) / 2, cv = spr(x0 + .5, y0 - .15, c1, y1 + .15, 30, 2), g = cv.g, e = glow(cv); cv.canopy = true;   // the canopy stops short of Pansodan's flyover
     for (let x = x0 + 1; x < c1 - .3; x += 2) box(g, x, m - .06, x + .12, m + .06, 3, 17, '#C9CDD0', '#E0E3E6');
     box(g, x0 + .5, y0 - .15, c1, y1 + .15, 17, 19, '#4E8A55', '#5E9A5A');
     for (let x = x0 + .8; x < c1 - .6; x += 1.5) box(g, x, y0 - .1, x + .7, y1 + .1, 19, 22, '#4E8A55', '#6AA866');   // the row of transverse gables
@@ -1385,6 +1385,43 @@ function stationBridge() {                                          // the cover
   for (const [y0, y1] of [...PLAT, [5, 5.8]]) {                     // steps down, westwards along the platform
     const yy = y1 > 5 ? 5 : (y0 + y1) / 2 - .3, x = q12(pbX(yy) - 2.7), n = 10, d = .35, s = spr(x - n * d, yy, x, yy + .6, H + 4, 2);
     for (let i = n - 1; i >= 0; i--) { const z = Math.round(H + 2 - (i + 1) * H / n); box(s.g, x - (n - i) * d, yy, x - (n - i - 1) * d, yy + .6, 0, Math.max(3, z), '#BDB7AB', '#D2CDC2'); }
+  }
+}
+// ── life at the station: people on platform 6/7 (the one we can see), the booking-office queue, the shunting yard ──
+function stationLife() {
+  const Z = 3, py = y => y + (V() - .5) * .5, day = [300, 1290];
+  const mat = col => thing(-.45, -.3, .45, .3, 8, 2, g => { tF(g, -.45, -.3, .45, .3, Z, col); for (let u = -.4; u < .4; u += .2) tF(g, u, -.3, u + .08, .3, Z, sh(col, .85)); });
+  for (let i = 0; i < 16; i++) {                                    // waiting passengers, in ones and twos
+    const L = look(i % 6 === 0 ? 'man' : undefined), x = 97 + V() * 34, y = py(-17.05);
+    if (i % 5 === 0) { L.shirt = L.low = '#8E1F1F'; L.hair = L.skin; L.woman = false; }   // a monk
+    vig(x, y, [standing(L, 'idle', false), standing(L, 'idle2', false)], { z: Z, win: jit(V.pick([[300, 600], [420, 1140], [900, 1290], day]), 40), seq: [[0, 4 + V() * 5], [1, 1.5 + V()]] });
+  }
+  for (let i = 0; i < 5; i++) {                                     // families camped on mats, waiting for a late train
+    const x = 99 + V() * 30, y = -17.05, w = jit(V.pick([[360, 1140], [600, 1290]]), 60);
+    vig(x, y, [mat(V.pick(['#B8863A', '#C75B4A', '#4F7FB5', '#6FA36A']))], { z: 0, win: w, d: -.05 });
+    for (let k = 0; k < 3; k++) { const L = k === 2 ? look('woman') : look(); vig(x - .25 + k * .25, y + (k % 2 ? .12 : -.08), [seated(L, 'sit', false), seated(L, k ? 'talk' : 'fan', false)], { z: Z, win: w, seq: [[0, 4 + V() * 4], [1, 1.5]] }); }
+  }
+  const tray = (c, col) => { const d = dup(c), g = d.getContext('2d'); g.fillStyle = '#C9A15A'; g.fillRect(0, 0, 7, 1); g.fillStyle = col; g.fillRect(1, 0, 5, 1); return d; };
+  for (let i = 0; i < 4; i++) {                                     // vendors walking the platform: peanuts, fruit, water
+    const L = look(i % 2 ? 'woman' : 'man'), col = V.pick(['#E8C07A', '#E0643C', '#9BD3E6', '#8DBE5A']);
+    const pics = ['walk1', 'walk2'].flatMap(p => [false, true].map(b => tray(standing(L, p, b), col)));
+    const x0 = 97 + V() * 10, len = 20 + V() * 12, sp = .25, ph = V() * 100;
+    vig(x0, -16.9, pics, { z: Z, win: jit([330, 1260], 40), tick: e => { const u = (T * sp + ph) % (2 * len), back = u > len; e.x = x0 + (back ? 2 * len - u : u); e.cur = pics[(back ? 0 : 1) + (Math.floor(T * 3 + ph) % 2) * 2]; } });
+  }
+  for (let i = 0; i < 4; i++) {                                     // flower sellers sorting the morning's flowers at the west end
+    const L = look('woman'), x = 95.4 + i * .5, y = -17.1 + (i % 2) * .25;
+    vig(x, y, [seated(L, 'sit', false), seated(L, 'read', false)], { z: Z, win: jit([270, 420], 20), seq: [[0, 2 + V() * 2], [1, 1]] });
+  }
+  const heap = thing(-.5, -.3, .5, .3, 10, 2, g => { for (let k = 0; k < 40; k++) { const u = -.45 + Math.random() * .9, v = -.25 + Math.random() * .5; g.fillStyle = ['#F5F5F5', '#FDD835', '#F48FB1', '#E53935', '#FF9800'][k % 5]; g.fillRect(sx(u, v), sy(u, v, Z + 1 + (k % 3)), 1, 1); } });
+  vig(96.2, -16.8, [heap], { z: 0, win: [270, 420] });
+  for (let i = 0; i < 6; i++) {                                     // sleeping out on the platform through the night
+    const L = look(), x = 100 + V() * 28;
+    vig(x, -17.05, [mat('#8C7A5A')], { z: 0, win: [1320, 300], d: -.05 });
+    vig(x, -17.05, [seated(L, 'lean', false)], { z: Z, win: [1320, 300] });
+  }
+  for (let i = 0; i < 7; i++) {                                     // the queue at the advance booking office (7:00–15:00)
+    const L = look(), x = 90 + i * .55, y = 4.3;
+    vig(x, y, [standing(L, 'idle', true), standing(L, 'idle2', true)], { win: [jit([420, 470], 30)[0], jit([860, 900], 30)[1]], seq: [[0, 5 + V() * 6], [1, 2]] });
   }
 }
 function grow() {
@@ -2024,6 +2061,7 @@ function drawSignal(sig, X, Y, e) {
 function behind(ex, ey, s, ez = 0) {
   if (s.fly && ez > 0) return false;               // a car up on a flyover is on its deck, never under it
   if (s.above) return true;                        // bridge decks: anything they overlap on screen is under or behind them
+  if (s.canopy) return ey < s.y1 + .05;            // platform canopies: whoever stands under one or beyond it
   if (s.round) return ey - ex < CY - CX;
   if (ex >= s.x0 && ex <= s.x1 && ey >= s.y0 && ey <= s.y1) return ey - ex < (s.y0 + s.y1 - s.x0 - s.x1) / 2;
   return ex > s.x0 && ey < s.y1;
@@ -2171,7 +2209,7 @@ addEventListener('resize', resize);
     if (s.ecv) eg.drawImage(s.ecv, s.left, s.top);
     s.ecv = s.eg = s.g = null;
   }
-  populate(); setupSignals(); riverside(); suleLife(); parkLife(); upperLife(); bridgeWalkers(); railLife(); marketLife();
+  populate(); setupSignals(); riverside(); suleLife(); parkLife(); upperLife(); bridgeWalkers(); railLife(); marketLife(); stationLife();
   resize(); camX = sx(CX, CY) - vw / 2; camY = sy(CX, CY, 60) - vh / 2; clampCam();
   document.getElementById('load').remove();
   tick(); setInterval(tick, 1000);

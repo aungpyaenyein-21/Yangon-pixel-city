@@ -1299,6 +1299,57 @@ function forecourt() {                                               // the car 
   for (let x = 98; x < 134; x += 6) lamp(x + .5, -38.6);
   busStop(112, -39, 1, 'ဘူတာကြီး');
 }
+// platforms (OSM): 1 against the building, islands 2/3, 4/5 and 6/7 (the Circle Line's), under long green canopies
+const PLAT = [[-26.3, -25.4, 97, 134], [-24.2, -23.2, 95, XE], [-20.6, -19.5, 96, XE], [-17.6, -16.5, 94, XE]];   // [y0, y1, x0, x1]
+function platforms() {
+  for (const [y0, y1, x0, x1] of PLAT) {
+    const p = spr(x0, y0, x1, y1, 6, 2); box(p.g, x0, y0, x1, y1, 0, 3, '#B9B2A4', '#D6D0C3');
+    for (const y of [y0 + .05, y1 - .13]) tF(p.g, x0, y, x1, y + .08, 3, '#E5C23A');                     // the yellow edge lines
+    const c1 = Math.min(x1, 133.2), m = (y0 + y1) / 2, cv = spr(x0 + .5, y0 - .15, c1, y1 + .15, 30, 2), g = cv.g, e = glow(cv);   // the canopy stops short of Pansodan's flyover
+    for (let x = x0 + 1; x < c1 - .3; x += 2) box(g, x, m - .06, x + .12, m + .06, 3, 17, '#C9CDD0', '#E0E3E6');
+    box(g, x0 + .5, y0 - .15, c1, y1 + .15, 17, 19, '#4E8A55', '#5E9A5A');
+    for (let x = x0 + .8; x < c1 - .6; x += 1.5) box(g, x, y0 - .1, x + .7, y1 + .1, 19, 22, '#4E8A55', '#6AA866');   // the row of transverse gables
+    for (let x = x0 + 2; x < c1 - 1; x += 4) { e.fillStyle = '#FFE7A8'; const X = sx(x, y1 + .15), Y = sy(x, y1 + .15, 17); e.fillRect(X, Y, 3, 1); e.fillStyle = 'rgba(255,215,130,.18)'; e.fillRect(X - 6, Y + 1, 15, 12); }   // lamps under it
+  }
+}
+function coach(x, y, col, band = '#EDE3C8') {                      // a carriage standing in the yard
+  const s = spr(x - 1.6, y - .35, x + 1.6, y + .35, 20, 3), g = s.g;
+  box(g, x - 1.6, y - .35, x + 1.6, y + .35, 1, 4, '#2A2A2A');
+  box(g, x - 1.6, y - .35, x + 1.6, y + .35, 4, 15, col, sh(col, 1.1));
+  for (const f of faces(x - 1.6, y - .35, x + 1.6, y + .35)) { fr(g, f, f.a, f.b, 9, 15, sh(band, f.s)); for (let u = f.a + .3; u < f.b - .2; u += .45) fr(g, f, u, u + 3 / 12, 10, 13, sh('#4A5563', f.s)); }
+  box(g, x - 1.55, y - .3, x + 1.55, y + .3, 15, 17, '#8E949A', '#A9AEB3');
+}
+function yard() {
+  for (const [a, b, c, d] of [[117, -13, 129, -11], [84.5, -12.5, 97, -7], [140, -13, XE, -10]]) {   // carriage sheds with rusty tin roofs
+    const s = spr(a, b, c, d, 26, 3), g = s.g;
+    for (let x = a; x <= c; x += 2) for (const y of [b, d - .15]) box(g, x, y, x + .15, y + .15, 1, 14, '#6E5A4A');
+    hip(g, a - .2, b - .2, c + .2, d + .2, 14, 6, '#8A4B32');
+  }
+  const liv = [['#8E2F24'], ['#8E2F24'], ['#7A2A22'], ['#2C4E8A'], ['#9A3B2A', '#9A3B2A']];   // cream over maroon, the odd blue set, red boxcars
+  for (let k = 0; k < 10; k++) {
+    if (chance(.3)) continue;
+    const y = -14.6 + k * 1.2, [col, band] = pick(liv); let x = 78 + (k % 4) * 2 + rnd() * 8;
+    const end = x + 3.4 * ri(3, 8);
+    for (; x < Math.min(end, 131); x += 3.4) if (!(x > 115 && x < 131 && y > -13.2 && y < -10.8) && !(x > 83 && x < 99 && y > -12.7 && y < -6.8)) coach(x + 1.6, y, col, band);
+  }
+  colonial(BOOK[0] + .3, BOOK[1] + .2, BOOK[2] - .3, BOOK[3] - 1.2, 2, '#E9DFC6');   // the advance booking office on Bogyoke Rd
+  const f = spr(110, 4.7, 126, 4.85, 10, 2); for (let x = 110; x < 126; x += 1 / 6) { const c = sx(x, 4.85); f.g.fillStyle = '#5A5F66'; f.g.fillRect(c, bs(c, 4.85) - 7, 1, 7); }   // the yard fence
+  sF(f.g, 4.85, 110, 126, 6, 7, '#5A5F66');
+}
+function stationBridge() {                                          // the covered footbridge beside Pansodan's flyover, steps down to each platform
+  const H = 24;
+  for (let y = 5; y > -27; y -= .5) {
+    const x = q12(pbX(y - .25) - 2.7), a = y - .5, s = spr(x, a, x + .6, y, H + 14, 2), g = s.g; s.above = true;
+    box(g, x, a, x + .6, y, H, H + 2, '#BDB7AB', '#D2CDC2');
+    box(g, x, a, x + .05, y, H + 2, H + 5, '#E8E4DA'); box(g, x + .55, a, x + .6, y, H + 2, H + 5, '#E8E4DA');
+    box(g, x - .05, a, x + .65, y, H + 11, H + 12, '#4E8A55', '#5E9A5A');
+    if (Math.round(y * 2) % 4 === 0) { box(g, x, a, x + .05, a + .1, H + 2, H + 11, '#9A9A9A'); box(g, x + .55, a, x + .6, a + .1, H + 2, H + 11, '#9A9A9A'); }
+  }
+  for (const [y0, y1] of [...PLAT, [5, 5.8]]) {                     // steps down, westwards along the platform
+    const yy = y1 > 5 ? 5 : (y0 + y1) / 2 - .3, x = q12(pbX(yy) - 2.7), n = 10, d = .35, s = spr(x - n * d, yy, x, yy + .6, H + 4, 2);
+    for (let i = n - 1; i >= 0; i--) { const z = Math.round(H + 2 - (i + 1) * H / n); box(s.g, x - (n - i) * d, yy, x - (n - i - 1) * d, yy + .6, 0, Math.max(3, z), '#BDB7AB', '#D2CDC2'); }
+  }
+}
 function grow() {
   BX = X0; BY = Y0; BE = XE;
   for (let i = sprites.length - 1; i >= 0; i--) if (sprites[i].y1 <= 5.01) sprites.splice(i, 1);
@@ -1338,7 +1389,7 @@ function grow() {
   withSeed(1926, () => {
     market(); railway(); railwayHQ(); junctionCity(); overpass();
     flyover(() => 67, suleZ, -4, -38, false); flyover(pbX, pansZ, 5, Y0 - 2, true);
-    stationBuilding(); forecourt();
+    stationBuilding(); forecourt(); platforms(); yard(); stationBridge();
     for (let n = 0; n < 40; n++) { const x = CATH[0] + .5 + rnd() * (CATH[2] - CATH[0] - 1), y = CATH[1] + .5 + rnd() * (CATH[3] - CATH[1] - 1.5); if (free1(x, y)) tree(q12(x), q12(y), 1 + rnd() * .6); }   // Holy Trinity's grounds
     lots(); fill(X0, Y0, XE, MH, PLAZA, 0);
     for (let x = -3; x > X0; x -= 5) { tree(x + .5, 153.5, 1 + rnd() * .4); lamp(x - 2, 154.4); }

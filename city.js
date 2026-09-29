@@ -975,9 +975,88 @@ function props() {
 // Bogyoke Rd (side streets end at Bogyoke Rd there) and fills the new strips with their own dice.
 const KEEP = [[65, 69], [126, 130]];                               // Sule Pagoda Rd and Pansodan St carry on north
 const MKT = [-20, -22, 18, 3];                                     // Bogyoke Market inside its fence (OSM, 1 tile ≈ 5 m)
-const RAILY = [-26, -22], HQ = [43, -8, 60, 1], JC = [X0, 11, -13, 22], CATH = [X0, -21, -21, 5];
+const RAILY = [-26, -22], HQ = [43, -8, 60, 1], JC = [X0, 11, -13, 22], CATH = [X0, -21, MKT[0], 5];
 const NS2 = [[-12, -10, 10, 148, '၂၇ လမ်း', '27TH ST'], [-4, -2, 10, 148, '၂၈ လမ်း', '28TH ST']];
 const BACKLANES = [26, 36, 83, 91, 100, 109, 118];                 // narrow lanes between the new blocks north of Bogyoke Rd
+// Bogyoke Aung San Market (1926): a long two-storey front in cream with terracotta roofs, a clock tower with a
+// dome over the main gate, arched end pavilions; behind it a grid of green tin-roofed sheds on cobbled lanes
+const MK = { wall: '#EFE2C4', trim: '#FFF6E2', roof: '#B84A32', arch: '#A8432C', dark: '#3A2E28', glass: '#3E4A56' };
+const TOWER = [-3.5, .1, -.5, 3.4], FRONT = [-16.5, 0, 12.5, 3];
+function hip(g, x0, y0, x1, y1, z, h, col) {                        // a hipped roof as a stack of ever-smaller slabs
+  const n = Math.max(1, Math.round(h / 2));
+  for (let i = 0; i < n; i++) {
+    const d = q12(Math.min(i * .28, (x1 - x0) / 2 - .1, (y1 - y0) / 2 - .1));
+    box(g, x0 + d, y0 + d, x1 - d, y1 - d, z + i * 2, z + i * 2 + 2, col, sh(col, 1.15));
+  }
+}
+function mkBlock(x0, y0, x1, y1, H, arcade = true) {               // one stretch of the front: arcade below, windows above
+  const s = spr(x0, y0, x1, y1, H + 30, 4), g = s.g, e = glow(s);
+  mark(Math.floor(x0), Math.floor(y0), Math.ceil(x1), Math.ceil(y1), H);
+  box(g, x0, y0, x1, y1, 0, H, MK.wall, '#C9BCA0');
+  for (const f of faces(x0, y0, x1, y1)) {
+    if (arcade) arches(g, e, f, 0, 12, MK.arch, MK.dark, .7); else fr(g, f, f.a, f.b, 0, 2, sh('#CDBF9F', f.s));
+    fr(g, f, f.a, f.b, 12, 14, sh(MK.trim, f.s));
+    arches(g, e, f, 14, 9, MK.trim, MK.glass, .3);
+    fr(g, f, f.a, f.b, H - 3, H, sh(MK.trim, f.s));
+    for (let u = f.a; u <= f.b; u += 1) fr(g, f, Math.max(f.a, u - 1 / 12), Math.min(f.b, u + 1 / 12), 12, H - 3, sh(MK.trim, f.s * .96));   // pilasters
+  }
+  hip(g, x0 - .15, y0 - .15, x1 + .15, y1 + .15, H, 8, MK.roof);
+  return s;
+}
+function pavilion(x0, y0, x1, y1, H) {                               // the end blocks: taller, one great red arch on each face
+  const s = mkBlock(x0, y0, x1, y1, H), g = s.g, e = glow(s);
+  for (const f of faces(x0, y0, x1, y1)) {
+    const m = (f.a + f.b) / 2;
+    fr(g, f, m - .9, m + .9, 14, H - 4, sh(MK.arch, f.s)); fr(g, f, m - .7, m + .7, 14, H - 6, sh(MK.glass, f.s));
+    fr(g, f, m - .9, m - .6, H - 6, H - 4, sh(MK.wall, f.s)); fr(g, f, m + .6, m + .9, H - 6, H - 4, sh(MK.wall, f.s));
+    fr(e, f, m - .7, m + .7, 16, H - 7, '#FFE2A0');
+  }
+}
+const clockFace = () => pix(9, 9, P => { P(2, 0, 5, 9, '#3A2E28'); P(0, 2, 9, 5, '#3A2E28'); P(1, 1, 7, 7, '#3A2E28'); P(2, 1, 5, 7, '#FFFBEF'); P(1, 2, 7, 5, '#FFFBEF'); });
+function clockTower() {
+  const [x0, y0, x1, y1] = TOWER, H = 46, cx = (x0 + x1) / 2, cy = (y0 + y1) / 2, s = spr(x0, y0, x1, y1, H + 40, 6), g = s.g, e = glow(s);
+  mark(Math.floor(x0), Math.floor(y0), Math.ceil(x1), Math.ceil(y1), H + 20);
+  box(g, x0, y0, x1, y1, 0, H, MK.wall, '#C9BCA0');
+  for (const f of faces(x0, y0, x1, y1)) {
+    const m = (f.a + f.b) / 2;
+    fr(g, f, m - .8, m + .8, 0, 13, sh(MK.arch, f.s)); fr(g, f, m - .6, m + .6, 0, 12, sh(MK.dark, f.s)); fr(e, f, m - .6, m + .6, 2, 11, '#FFCF7A');   // the main gate
+    fr(g, f, f.a, f.b, 13, 15, sh(MK.trim, f.s));
+    arches(g, e, f, 15, 9, MK.trim, MK.glass, .4);
+    fr(g, f, f.a, f.b, 26, 28, sh(MK.trim, f.s));
+    const t = clockFace(); fimg(g, f, m - t.width / 24, 31, t); fimg(e, f, m - t.width / 24, 31, t);
+    fr(g, f, f.a, f.b, H - 3, H, sh(MK.trim, f.s));
+    fr(g, f, f.a, f.a + 2 / 12, 0, H, sh(MK.trim, f.s * .95)); fr(g, f, f.b - 2 / 12, f.b, 0, H, sh(MK.trim, f.s * .95));
+  }
+  box(g, x0 + .5, y0 + .5, x1 - .5, y1 - .5, H, H + 5, MK.trim);                                        // drum
+  lathe(g, cx, cy, H + 5, 12, t => 1.05 * Math.sqrt(Math.max(0, 1 - (t / 12) ** 2)), ['#FFF6E2', '#F2E6CC', '#E3D4B4', '#CDBB98', '#B8A47E', '#9C8964'], '#FFFBEF');
+  lathe(g, cx, cy, H + 17, 6, t => .12 * (1 - t / 6) + .03, GOLD, GOLD[0]);
+}
+function shed(x0, y0, x1, y1) {                                     // green tin roof over rows of stalls
+  const H = 9, s = spr(x0, y0, x1, y1, H + 16, 4), g = s.g, e = glow(s);
+  box(g, x0, y0, x1, y1, 0, H, '#D8D0BE', '#B9B1A1');
+  for (const f of faces(x0, y0, x1, y1)) {
+    fr(g, f, f.a + .1, f.b - .1, 0, 7, sh('#3A302A', f.s)); fr(e, f, f.a + .1, f.b - .1, 2, 7, '#FFD690');
+    for (let u = f.a + .2; u < f.b - .2; u += 1 / 12) if (chance(.55)) fr(g, f, u, u + 1 / 12, ri(0, 2), ri(3, 6), pick(GOODS));
+  }
+  hip(g, x0 - .2, y0 - .2, x1 + .2, y1 + .2, H, 6, '#4E8F5C');
+  for (let n = ri(0, 2); n > 0; n--) { const a = q12(x0 + rnd() * (x1 - x0 - 1.2)), b = q12(y0 + .3 + rnd() * (y1 - y0 - 1)); tF(g, a, b, a + 1.2, b + .8, H + 7, pick(['#3A6FB5', '#2F5E9E', '#8A8F96'])); }   // tarpaulins, patches
+}
+function market() {
+  fill(MKT[0], MKT[1], MKT[2], MKT[3], COBBLE);
+  for (const [a, b] of [[-11.5, -3.2], [-1.2, 7.2]]) for (let k = 0; k < 4; k++) shed(a, -19.8 + k * 4.4, b, -16.2 + k * 4.4);
+  shed(-19.6, -19.8, -17.2, 2.4); shed(14.6, -19.8, 17.6, 2.4); shed(-16.5, -21.8, 12.5, -20.4);
+  mkBlock(-16.5, -7, -13.5, 0, 24); mkBlock(9.5, -7, 12.5, 0, 24);                                    // the wings going back
+  mkBlock(FRONT[0] + 3.5, FRONT[1], TOWER[0], FRONT[3], 26); mkBlock(TOWER[2], FRONT[1], FRONT[2] - 3.5, FRONT[3], 26);
+  pavilion(FRONT[0], -.4, FRONT[0] + 3.5, 3.3, 34); pavilion(FRONT[2] - 3.5, -.4, FRONT[2], 3.3, 34);
+  clockTower();
+  const fence = spr(MKT[0], 3, MKT[2], 3.1, 8, 2), fg2 = fence.g;                                       // the iron fence, gaps for the gates
+  for (let x = MKT[0]; x < MKT[2]; x += 1 / 6) {
+    if ((x > TOWER[0] - .2 && x < TOWER[2] + .2) || (x > -18.4 && x < -17.4) || (x > 13.4 && x < 14.4)) continue;
+    const c = sx(x, 3.1); fg2.fillStyle = '#2F4A3A'; fg2.fillRect(c, bs(c, 3.1) - 6, 1, 6);
+  }
+  sF(fg2, 3.1, MKT[0], MKT[2], 5, 6, '#2F4A3A');
+  for (let x = MKT[0] + 1; x < MKT[2] - 1; x += 1.6) if (chance(.45) && (x < TOWER[0] - 1 || x > TOWER[2] + .5)) parked(x + .6, 4, chance(.5) ? 'E' : 'W', chance(.6) ? 'taxi' : 'car');
+}
 function grow() {
   BX = X0; BY = Y0;
   for (let i = sprites.length - 1; i >= 0; i--) if (sprites[i].y1 <= 5.01) sprites.splice(i, 1);
@@ -1003,7 +1082,7 @@ function grow() {
   }
   for (const i of side) G[i] = WALK;
   withSeed(1926, () => {
-    lots(); fill(X0, Y0, MW, MH, PLAZA, 0);
+    market(); lots(); fill(X0, Y0, MW, MH, PLAZA, 0);
     for (let x = -3; x > X0; x -= 5) { tree(x + .5, 153.5, 1 + rnd() * .4); lamp(x - 2, 154.4); }
     railing(X0, 0);
     for (const [y0, y1, x0, x1, m] of EW) if (m && x0 === 0) for (let x = X0 + 3; x < 0; x += 8) for (const y of [y0 - 1, y1]) if (at(x, y) === WALK && free1(x, y)) lamp(x + .5, y + .5);

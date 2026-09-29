@@ -5,12 +5,14 @@
 // ── projection: 2:1 isometric, camera looks from the south-west ─────────────
 const HW = 12, HH = 6, FL = 10;              // half tile (1 tile ≈ 5 m), px per storey
 const MW = 134, MH = 176;                     // map in tiles: x → east, y → south
-const OY = MW * HH + 150;                     // headroom for the towers near the NE corner
-const CW = (MW + MH) * HW, CH = OY + MH * HH + 40;
-const sx = (x, y) => Math.round((x + y) * HW);
+const X0 = -28, Y0 = -30;                     // the map grew west and north (Bogyoke Market): tiles run X0..MW, Y0..MH
+const GW = MW - X0, GH = MH - Y0, SX0 = -(X0 + Y0) * HW;   // SX0 is even, so the 1-px column maths below stays exact
+const OY = (MW - Y0) * HH + 150;              // headroom for the towers near the NE corner
+const CW = (GW + GH) * HW, CH = OY + (MH - X0) * HH + 40;
+const sx = (x, y) => Math.round((x + y) * HW) + SX0;
 const sy = (x, y, z = 0) => Math.round((y - x) * HH) + OY - z;
-const bw = (c, x) => (c >> 1) - Math.round(x * 12) + OY;        // ground line under an x = const wall
-const bs = (c, y) => Math.round(y * 12) - ((c + 1) >> 1) + OY;  // ground line under a y = const wall
+const bw = (c, x) => ((c - SX0) >> 1) - Math.round(x * 12) + OY;        // ground line under an x = const wall
+const bs = (c, y) => Math.round(y * 12) - ((c - SX0 + 1) >> 1) + OY;  // ground line under a y = const wall
 
 // ── small helpers ────────────────────────────────────────────────────────────
 let seed = 1885;
@@ -18,8 +20,11 @@ const rnd = () => (seed = (seed * 1664525 + 1013904223) >>> 0) / 4294967296;
 const ri = (a, b) => a + Math.floor(rnd() * (b - a + 1));
 const pick = a => a[Math.floor(rnd() * a.length)];
 const chance = p => rnd() < p;
+function withSeed(v, fn) { const keep = seed; seed = v; fn(); seed = keep; }   // the new strips get their own dice, so the old map stays as it was
 const q12 = v => Math.round(v * 12) / 12;
-const mk = (w, h) => { const c = document.createElement('canvas'); c.width = Math.max(1, Math.ceil(w)); c.height = Math.max(1, Math.ceil(h)); return c; };
+// offscreen canvases live in plain memory, not on the GPU: the grown map's ~2000 sprites plus the two map-sized
+// layers overran the GPU's budget and every canvas was lost at once (context lost) in Chrome
+const mk = (w, h) => { const c = document.createElement('canvas'); c.width = Math.max(1, Math.ceil(w)); c.height = Math.max(1, Math.ceil(h)); c.getContext('2d', { willReadFrequently: true }); return c; };
 const shc = new Map();
 function sh(hex, f = 1) {
   const k = hex + f; let v = shc.get(k);
@@ -207,40 +212,42 @@ const LM = {
   divcourt: [70, 141, 98, 147], temple: [19, 105, 24, 110],
 };
 
-const G = new Uint8Array(MW * MH), MAIN = new Uint8Array(MW * MH), HT = new Uint16Array(MW * MH);
-const ROAD = 1, WALK = 2, GRASS = 3, WATER = 4, PATH = 5, PROM = 6, PLAZA = 7, RES = 8, LOT = 9, ISLE = 10;
-const at = (x, y) => (x < 0 || y < 0 || x >= MW || y >= MH ? -1 : G[y * MW + x]);
+const G = new Uint8Array(GW * GH), MAIN = new Uint8Array(GW * GH), HT = new Uint16Array(GW * GH);
+const ix = (x, y) => (y - Y0) * GW + (x - X0);
+let BX = 0, BY = 0;                           // the original map is built first as it always was; then the new strips (grow)
+const ROAD = 1, WALK = 2, GRASS = 3, WATER = 4, PATH = 5, PROM = 6, PLAZA = 7, RES = 8, LOT = 9, ISLE = 10, RAIL = 11, COBBLE = 12;
+const at = (x, y) => (x < BX || y < BY || x >= MW || y >= MH ? -1 : G[ix(x, y)]);
 const rbd = (x, y) => Math.hypot(x + .5 - CX, y + .5 - CY);
-function mark(x0, y0, x1, y1, h) { for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) if (x >= 0 && y >= 0 && x < MW && y < MH) HT[y * MW + x] = h; }
+function mark(x0, y0, x1, y1, h) { for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) if (x >= BX && y >= BY && x < MW && y < MH) HT[ix(x, y)] = h; }
 // can the camera see a figure h px tall standing at (x, y)? walk the sight line towards the south-west
 function seen(x, y, h = 10, z = 1) {
   for (const o of [-.35, 0, .35]) for (let t = .5; t < 30; t += .5) {    // three sight lines ≈ a figure's width
     const tx = Math.floor(x + o - t), ty = Math.floor(y + o + t);
-    if (tx < 0 || ty >= MH) break;
-    if (HT[ty * MW + tx] > 12 * t + z + h / 2) return false;
+    if (tx < BX || ty >= MH) break;
+    if (HT[ix(tx, ty)] > 12 * t + z + h / 2) return false;
   }
   return true;
 }
 function fill(x0, y0, x1, y1, t, only) {
-  for (let y = Math.max(0, y0); y < Math.min(MH, y1); y++) for (let x = Math.max(0, x0); x < Math.min(MW, x1); x++) {
-    const i = y * MW + x; if (only === undefined || G[i] === only) G[i] = t;
+  for (let y = Math.max(BY, y0); y < Math.min(MH, y1); y++) for (let x = Math.max(BX, x0); x < Math.min(MW, x1); x++) {
+    const i = ix(x, y); if (only === undefined || G[i] === only) G[i] = t;
   }
 }
 
 function layout() {
-  for (const [y0, y1, x0, x1, m] of EW) { fill(x0, y0, x1, y1, ROAD); if (m) for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) MAIN[y * MW + x] = 1; }
-  for (const [x0, x1, y0, y1, m] of NS) { fill(x0, y0, x1, y1, ROAD); if (m) for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) MAIN[y * MW + x] = 1; }
+  for (const [y0, y1, x0, x1, m] of EW) { fill(x0, y0, x1, y1, ROAD); if (m) for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) MAIN[ix(x, y)] = 1; }
+  for (const [x0, x1, y0, y1, m] of NS) { fill(x0, y0, x1, y1, ROAD); if (m) for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) MAIN[ix(x, y)] = 1; }
   for (let y = 0; y < MH; y++) for (let x = 0; x < MW; x++) {
-    const d = rbd(x, y), i = y * MW + x;
+    const d = rbd(x, y), i = ix(x, y);
     if (d < 5) G[i] = ISLE; else if (d < 8.5) { G[i] = ROAD; MAIN[i] = 1; }
     if (y >= 155) G[i] = WATER; else if (y >= 152 && !G[i]) G[i] = PROM;
   }
   const side = [];
   for (let y = 0; y < MH; y++) for (let x = 0; x < MW; x++) {
-    if (G[y * MW + x]) continue;
+    if (G[ix(x, y)]) continue;
     let r = rbd(x, y) < 9.6;
     for (let dy = -1; dy <= 1 && !r; dy++) for (let dx = -1; dx <= 1; dx++) if (at(x + dx, y + dy) === ROAD) { r = true; break; }
-    if (r) side.push(y * MW + x);
+    if (r) side.push(ix(x, y));
   }
   for (const i of side) G[i] = WALK;
   fill(70, 89, 99, 126, GRASS, 0);                                  // Maha Bandula Park
@@ -251,18 +258,18 @@ function layout() {
 
 // ── ground ───────────────────────────────────────────────────────────────────
 const GC = { 0: '#C3BBAA', [ROAD]: '#5B5E64', [WALK]: '#CEC6B4', [GRASS]: '#7DB64C', [WATER]: '#4E7F88', [PATH]: '#DCCFAE',
-  [PROM]: '#C8BDA6', [PLAZA]: '#C3BBAA', [RES]: '#B9B1A1', [LOT]: '#8E877B', [ISLE]: '#E6DDC8' };
-const GZ = t => (t === ROAD ? 0 : t === WATER ? -5 : 1);
+  [PROM]: '#C8BDA6', [PLAZA]: '#C3BBAA', [RES]: '#B9B1A1', [LOT]: '#8E877B', [ISLE]: '#E6DDC8', [RAIL]: '#7B7266', [COBBLE]: '#A99F8E' };
+const GZ = t => (t === ROAD ? 0 : t === WATER ? -5 : t === RAIL ? -6 : 1);
 function ground(g) {
-  for (let y = 0; y < MH; y++) {
-    for (let x = MW - 1; x >= 0;) {                     // east → west so the nearer tile wins
-      const t = G[y * MW + x]; let a = x;
-      while (a > 0 && G[y * MW + a - 1] === t) a--;
+  for (let y = Y0; y < MH; y++) {
+    for (let x = MW - 1; x >= X0;) {                    // east → west so the nearer tile wins
+      const t = G[ix(x, y)]; let a = x;
+      while (a > X0 && G[ix(a - 1, y)] === t) a--;
       tF(g, a, y, x + 1, y + 1, GZ(t), GC[t]); x = a - 1;
     }
   }
-  for (let y = 0; y < MH; y++) for (let x = 0; x < MW; x++) {
-    const t = G[y * MW + x], z = GZ(t), X = x + rnd(), Y = y + rnd();
+  const detail = (x, y) => {
+    const t = G[ix(x, y)], z = GZ(t), X = x + rnd(), Y = y + rnd();
     if (t === WALK || t === PLAZA || t === PROM || t === PATH || t === ISLE) {   // paving joints
       wF(g, x, y, y + 1, z, z + 1, sh(GC[t], .93)); sF(g, y, x, x + 1, z, z + 1, sh(GC[t], .93));
       if (chance(.2)) { g.fillStyle = sh(GC[t], .85); g.fillRect(sx(X, Y), sy(X, Y, z) - 1, 1, 1); }
@@ -272,31 +279,35 @@ function ground(g) {
       for (let k = 0; k < 4; k++) { const U = x + rnd(), V = y + rnd(); g.fillStyle = chance(.5) ? '#6CA23F' : '#94C862'; g.fillRect(sx(U, V), sy(U, V, 1) - 1, 1, 1); }
     } else if (t === WATER) {
       g.fillStyle = chance(.5) ? '#5C8E96' : '#44737B'; g.fillRect(sx(X, Y), sy(X, Y, -5), 4, 1);
+    } else if (t === COBBLE) {
+      g.fillStyle = chance(.5) ? '#968C7C' : '#B8AE9C'; g.fillRect(sx(X, Y), sy(X, Y, 1) - 1, 2, 1);
     }
     // curbs and river walls: the south / west side of a higher tile
     const S = at(x, y + 1), W = at(x - 1, y);
     if (z > 0 && S === ROAD) sF(g, y + 1, x, x + 1, 0, 1, '#8B8475');
     if (z > 0 && W === ROAD) wF(g, x, y, y + 1, 0, 1, '#8B8475');
-    if (t === WATER) {
+    if (t === WATER || t === RAIL) {                                  // river walls, and the sides of the railway cutting
       const N = at(x, y - 1), E = at(x + 1, y);
-      if (N >= 0 && N !== WATER) sF(g, y, x, x + 1, -5, 1, '#6E675C');
-      if (E >= 0 && E !== WATER) wF(g, x + 1, y, y + 1, -5, 1, '#7C7468');
+      if (N >= 0 && N !== t) sF(g, y, x, x + 1, z, 1, '#6E675C');
+      if (E >= 0 && E !== t) wF(g, x + 1, y, y + 1, z, 1, '#7C7468');
     }
-  }
+  };
+  for (let y = 0; y < MH; y++) for (let x = 0; x < MW; x++) detail(x, y);
+  withSeed(1926, () => { for (let y = Y0; y < MH; y++) for (let x = X0; x < MW; x++) if (x < 0 || y < 0) detail(x, y); });
   // lane markings and zebra crossings
   const paint = '#DCD9CC';
-  for (const [y0, y1, x0, x1, m] of EW) if (m) for (let x = x0; x < x1; x++) {
+  for (const [y0, y1, x0, x1, m] of EW) if (m) for (let x = x0 ? x0 : X0; x < x1; x++) {
     if (at(x, y0 - 1) === ROAD || at(x, y1) === ROAD || rbd(x, y0 + 2) < 10) continue;
     g.fillStyle = paint; for (let c = sx(x, y0 + 2), e = sx(x + .5, y0 + 2); c < e; c++) g.fillRect(c, bs(c, y0 + 2), 1, 1);
   }
-  for (const [x0, x1, y0, y1, m] of NS) if (m) for (let y = y0; y < y1; y++) {
-    if (at(x0 - 1, y) === ROAD || at(x1, y) === ROAD || rbd(x0 + 2, y) < 10) continue;
+  for (const [x0, x1, y0, y1, m] of NS) if (m) for (let y = y0 ? y0 : Y0; y < y1; y++) {
+    if (at(x0 + 2, y) !== ROAD || at(x0 - 1, y) === ROAD || at(x1, y) === ROAD || rbd(x0 + 2, y) < 10) continue;
     g.fillStyle = paint; for (let c = sx(x0 + 2, y), e = sx(x0 + 2, y + .5); c < e; c++) g.fillRect(c, bw(c, x0 + 2), 1, 1);
   }
   for (const [y0, y1, ex0, ex1, m] of EW) for (const [x0, x1, ny0, ny1, nm] of NS) {
     if (!(m || nm) || x0 < ex0 || x1 > ex1 || ny0 > y0 || ny1 < y1 || rbd(x0, y0) < 12) continue;
-    if (m && x0 - 1.25 > 0) for (let k = 0; k < (y1 - y0) * 2; k++) tF(g, x0 - 1.25, y0 + k * .5 + .125, x0 - .25, y0 + k * .5 + .375, 0, paint);
-    if (nm && y0 - 1.25 > 0) for (let k = 0; k < (x1 - x0) * 2; k++) tF(g, x0 + k * .5 + .125, y0 - 1.25, x0 + k * .5 + .375, y0 - .25, 0, paint);
+    if (m && at(Math.floor(x0 - 1.25), y0) === ROAD) for (let k = 0; k < (y1 - y0) * 2; k++) tF(g, x0 - 1.25, y0 + k * .5 + .125, x0 - .25, y0 + k * .5 + .375, 0, paint);
+    if (nm && at(x0, Math.floor(y0 - 1.25)) === ROAD) for (let k = 0; k < (x1 - x0) * 2; k++) tF(g, x0 + k * .5 + .125, y0 - 1.25, x0 + k * .5 + .375, y0 - .25, 0, paint);
   }
 }
 
@@ -862,26 +873,26 @@ function vehicle(type, dir, col) {
     sub(-1, 1, zb, zb + 5, '#F2F2EE', '#E0DED8'); sub(-.85, .85, zb + 5, zb + 11, '#FAFAF5', '#D23B3B');
     for (const f of [wf, sf]) { fr(g, f, f.a, f.b, zb + 2, zb + 3, sh('#1E4FA0', f.s)); fr(g, f, f.a + .3, f.b - .3, zb + 6, zb + 9, sh('#34465A', f.s)); fr(e, f, f.a + .3, f.b - .3, zb + 6, zb + 9, '#FFF0C0'); }
   }
-  return { cv: s.cv, ecv: s.ecv, dx: s.left, dy: s.top - OY, bb: (x, y) => ({ x0: x + x0, y0: y + y0, x1: x + x1, y1: y + y1, left: s.left + sx(x, y), top: s.top + sy(x, y) - OY, w: s.w, h: s.h }) };
+  return { cv: s.cv, ecv: s.ecv, dx: s.left - SX0, dy: s.top - OY, bb: (x, y) => ({ x0: x + x0, y0: y + y0, x1: x + x1, y1: y + y1, left: s.left - SX0 + sx(x, y), top: s.top + sy(x, y) - OY, w: s.w, h: s.h }) };
 }
 
 // ── build everything ─────────────────────────────────────────────────────────
 function blocks() {
-  const seen = new Uint8Array(MW * MH), out = [];
-  for (let i = 0; i < MW * MH; i++) {
-    if (seen[i] || G[i] !== 0) continue;
-    let x0 = MW, y0 = MH, x1 = 0, y1 = 0; const st = [i]; seen[i] = 1;
+  const seen = new Uint8Array(GW * GH), out = [];
+  for (let sy0 = BY; sy0 < MH; sy0++) for (let sx0 = BX; sx0 < MW; sx0++) {
+    if (seen[ix(sx0, sy0)] || at(sx0, sy0) !== 0) continue;
+    let x0 = MW, y0 = MH, x1 = BX, y1 = BY; const st = [[sx0, sy0]]; seen[ix(sx0, sy0)] = 1;
     while (st.length) {
-      const j = st.pop(), x = j % MW, y = (j / MW) | 0;
+      const [x, y] = st.pop();
       x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y);
-      for (const k of [j - 1, j + 1, j - MW, j + MW]) if (k >= 0 && k < MW * MH && !seen[k] && G[k] === 0 && Math.abs(k % MW - x) <= 1) { seen[k] = 1; st.push(k); }
+      for (const [a, b] of [[x - 1, y], [x + 1, y], [x, y - 1], [x, y + 1]]) if (at(a, b) === 0 && !seen[ix(a, b)]) { seen[ix(a, b)] = 1; st.push([a, b]); }
     }
     out.push([x0, y0, x1 + 1, y1 + 1]);
   }
   return out;
 }
 const isFree = (x0, y0, x1, y1) => { for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) if (at(x, y) !== 0) return false; return true; };
-const nearMain = (x, y) => x >= 0 && y >= 0 && x < MW && y < MH && MAIN[(y | 0) * MW + (x | 0)] === 1;
+const nearMain = (x, y) => x >= BX && y >= BY && x < MW && y < MH && MAIN[ix(x | 0, y | 0)] === 1;
 function building(x0, y0, x1, y1) {
   const mx = (x0 + x1) >> 1, my = (y0 + y1) >> 1;
   const stW = at(x0 - 1, my) === WALK, stS = at(mx, y1) === WALK;
@@ -959,6 +970,47 @@ function props() {
   const f = vehicle('ferry', 'N', '#F2F2EE'); sprites.push({ ...f.bb(132.6, 159.5), cv: f.cv, ecv: f.ecv });
 }
 
+// ── the map grown west and north of the original: Bogyoke Market, the railway, Junction City ──
+// Everything above is the original map, built exactly as before; grow() then drops what stood north of
+// Bogyoke Rd (side streets end at Bogyoke Rd there) and fills the new strips with their own dice.
+const KEEP = [[65, 69], [126, 130]];                               // Sule Pagoda Rd and Pansodan St carry on north
+const MKT = [-20, -22, 18, 3];                                     // Bogyoke Market inside its fence (OSM, 1 tile ≈ 5 m)
+const RAILY = [-26, -22], HQ = [43, -8, 60, 1], JC = [X0, 11, -13, 22], CATH = [X0, -21, -21, 5];
+const NS2 = [[-12, -10, 10, 148, '၂၇ လမ်း', '27TH ST'], [-4, -2, 10, 148, '၂၈ လမ်း', '28TH ST']];
+const BACKLANES = [26, 36, 83, 91, 100, 109, 118];                 // narrow lanes between the new blocks north of Bogyoke Rd
+function grow() {
+  BX = X0; BY = Y0;
+  for (let i = sprites.length - 1; i >= 0; i--) if (sprites[i].y1 <= 5.01) sprites.splice(i, 1);
+  for (let i = ents.length - 1; i >= 0; i--) if (ents[i].y < 5) ents.splice(i, 1);
+  for (let i = upper.length - 1; i >= 0; i--) if (upper[i].y1 <= 5.01) upper.splice(i, 1);
+  for (let y = 0; y < 5; y++) for (let x = 0; x < MW; x++) { const i = ix(x, y); G[i] = MAIN[i] = HT[i] = 0; }
+  const kept = x => KEEP.some(([a, b]) => x >= a && x < b);
+  for (let x = 0; x < MW; x++) if (at(x, 5) === ROAD && !kept(x)) G[ix(x, 5)] = WALK;
+  for (const [y0, y1, x0, x1, m] of EW) if (x0 === 0) { fill(X0, y0, 0, y1, ROAD); if (m) for (let y = y0; y < y1; y++) for (let x = X0; x < 0; x++) MAIN[ix(x, y)] = 1; }
+  for (const [a, b] of KEEP) { fill(a, Y0, b, 5, ROAD); for (let y = Y0; y < 5; y++) for (let x = a; x < b; x++) MAIN[ix(x, y)] = 1; }
+  for (const [x0, x1, y0, y1] of NS2) fill(x0, y0, x1, y1, ROAD);
+  for (let y = 152; y < MH; y++) for (let x = X0; x < 0; x++) { const i = ix(x, y); if (y >= 155) G[i] = WATER; else if (!G[i]) G[i] = PROM; }
+  fill(X0, RAILY[0], MW, RAILY[1], RAIL); for (const [a, b] of KEEP) fill(a, RAILY[0], b, RAILY[1], ROAD);
+  fill(X0, Y0, MW, RAILY[0], GRASS, 0);                             // the railway embankment beyond the tracks
+  fill(MKT[0], MKT[1], MKT[2], MKT[3], RES); fill(MKT[0], MKT[3], MKT[2], 5, LOT);   // the market, and its parking strip
+  fill(...CATH, GRASS, 0); fill(...HQ, RES); fill(...JC, RES);
+  for (const x of BACKLANES) fill(x, RAILY[1], x + 1, 5, WALK, 0);
+  fill(X0, RAILY[1], MW, RAILY[1] + 1, WALK, 0);                   // a lane along the railway fence
+  const side = [];                                                  // sidewalks, as in layout()
+  for (let y = Y0; y < MH; y++) for (let x = X0; x < MW; x++) {
+    if ((x >= 0 && y >= 5) || G[ix(x, y)]) continue;
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) if (at(x + dx, y + dy) === ROAD) { side.push(ix(x, y)); dy = dx = 2; }
+  }
+  for (const i of side) G[i] = WALK;
+  withSeed(1926, () => {
+    lots(); fill(X0, Y0, MW, MH, PLAZA, 0);
+    for (let x = -3; x > X0; x -= 5) { tree(x + .5, 153.5, 1 + rnd() * .4); lamp(x - 2, 154.4); }
+    railing(X0, 0);
+    for (const [y0, y1, x0, x1, m] of EW) if (m && x0 === 0) for (let x = X0 + 3; x < 0; x += 8) for (const y of [y0 - 1, y1]) if (at(x, y) === WALK && free1(x, y)) lamp(x + .5, y + .5);
+    for (const [a] of KEEP) for (let y = Y0 + 2; y < 5; y += 8) for (const x of [a - 1, a + 4]) if (at(x, y) === WALK && free1(x, y)) lamp(x + .5, y + .5);
+  });
+}
+
 // painter's order: a is in front of b if it lies wholly west or wholly south of it
 function frontOf(a, b) {
   if (a.x1 <= b.x0 || a.y0 >= b.y1) return 1;
@@ -988,7 +1040,7 @@ const arc = (a0, a1) => { const p = [], n = Math.ceil((a1 - a0) / 12); for (let 
 function lane(pts, sp, minor) {   // sp: cruising speed, tiles/s
   const cum = [0]; for (let i = 1; i < pts.length; i++) cum.push(cum[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]));
   const n = Math.max(1, Math.round(cum[cum.length - 1] / (minor ? 18 : 11)));
-  const out = ([x, y], [px, py]) => { if (x >= 0 && y >= 0 && x <= MW) return [x, y]; const d = Math.hypot(x - px, y - py) || 1; return [x + (x - px) / d * 8, y + (y - py) / d * 8]; };
+  const out = ([x, y], [px, py]) => { if (x >= X0 && y >= Y0 && x <= MW) return [x, y]; const d = Math.hypot(x - px, y - py) || 1; return [x + (x - px) / d * 8, y + (y - py) / d * 8]; };
   pts = [out(pts[0], pts[1]), ...pts.slice(1, -1), out(pts[pts.length - 1], pts[pts.length - 2])];   // run on 8 tiles out of sight, so merging queues form off the map
   for (let i = 1; i < pts.length; i++) cum[i] = cum[i - 1] + Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
   const L = { pts, cum, len: cum[cum.length - 1], sp, cars: [], stops: [] };
@@ -1023,16 +1075,17 @@ function addWalker(l, kind, s, bowl) {
 }
 function populate() {
   for (const [y0, y1, x0, x1, m] of EW) {
-    if (y0 === 84) { lane([[MW + 1, 85], ...arc(8.5, 171.5), [-1, 85]], 2.2); lane([[-1, 87], ...arc(188.5, 351.5), [MW + 1, 87]], 2.2); }
-    else if (m) { lane([[x1 + 1, y0 + 1], [x0 - 1, y0 + 1]], 2.2); lane([[x0 - 1, y0 + 3], [x1 + 1, y0 + 3]], 2.2); }
+    if (y0 === 84) { lane([[MW + 1, 85], ...arc(8.5, 171.5), [X0 - 1, 85]], 2.2); lane([[X0 - 1, 87], ...arc(188.5, 351.5), [MW + 1, 87]], 2.2); }
+    else if (m) { const w = (x0 || X0) - 1; lane([[x1 + 1, y0 + 1], [w, y0 + 1]], 2.2); lane([[w, y0 + 3], [x1 + 1, y0 + 3]], 2.2); }
     walkers(x0, y0 - .5, x1, y0 - .5); walkers(x0, y1 + .5, x1, y1 + .5);
   }
-  // main streets turn round just short of Strand Rd; one-way side streets only ever turn right onto or off its westbound side
+  // main streets turn round just short of Strand Rd (and Shwe Bon Thar short of Bogyoke Rd); one-way side streets only ever
+  // turn right: in from Bogyoke Rd's eastbound side, out along Strand Rd's westbound side, and the other way round
   let alt = 0;
   for (const [x0, x1, y0, y1, m] of NS) {
-    if (x0 === 65) lane([[66, -1], ...arc(98.5, 261.5), [66, 147], [68, 147], ...arc(278.5, 441.5), [68, -1]], 2.2);
-    else if (m) lane([[x0 + 1, -1], [x0 + 1, 147], [x0 + 3, 147], [x0 + 3, -1]], 2.2);
-    else if (y1 >= 148) { const x = x0 + 1; lane(alt++ % 2 ? [[MW + 1, 149], [x, 149], [x, -1]] : [[x, -1], [x, 149], [-1, 149]], 1.1, true); }
+    if (x0 === 65) lane([[66, Y0 - 1], ...arc(98.5, 261.5), [66, 147], [68, 147], ...arc(278.5, 441.5), [68, Y0 - 1]], 2.2);
+    else if (m) { const top = KEEP.some(([a]) => a === x0) ? Y0 - 1 : 11.5; lane([[x0 + 1, top], [x0 + 1, 147], [x0 + 3, 147], [x0 + 3, top], ...(top > 0 ? [[x0 + 1, top]] : [])], 2.2); }
+    else if (y1 >= 148) { const x = x0 + 1; lane(alt++ % 2 ? [[MW + 1, 149], [x, 149], [x, 9], [MW + 1, 9]] : [[X0 - 1, 9], [x, 9], [x, 149], [X0 - 1, 149]], 1.1, true); }
     walkers(x0 - .5, y0, x0 - .5, y1); walkers(x1 + (x0 === 126 ? .2 : .5), y0, x1 + (x0 === 126 ? .2 : .5), y1);   // Pansodan: keep off the books
   }
   walkers(84.5, 89, 84.5, 117, 6); walkers(70, 107.5, 99, 107.5, 6); walkers(0, 153.5, 120, 153.5, 7);
@@ -1045,12 +1098,12 @@ function populate() {
     if (WALKABLE.has(at(x | 0, y | 0))) ents.push({ k: 'pig', x, y, hx: x, hy: y, t: rnd() * 2, r: rnd() });
   }
   for (let i = 0; i < 26; i++) birds.push({ a: rnd() * 6.28, r: 5 + rnd() * 6, z: 50 + rnd() * 70, w: (.25 + rnd() * .3) * (i % 3 ? 1 : -1) });
-  for (let i = 0; i < 7; i++) crows.push({ x: rnd() * MW, y: rnd() * 150, vx: .8 + rnd(), vy: (rnd() - .5) * .6, z: 90 + rnd() * 50 });
+  for (let i = 0; i < 7; i++) crows.push({ x: X0 + rnd() * GW, y: rnd() * 150, vx: .8 + rnd(), vy: (rnd() - .5) * .6, z: 90 + rnd() * 50 });
   for (const [y, n] of [[160, 2], [165.5, 1], [170, 3]]) for (let i = 0; i < n; i++) {
     const big = y === 165.5, dir = i % 2 ? 'E' : 'W', col = '#F2F2EE';
-    ents.push({ k: 'boat', y, x: rnd() * MW, v: (big ? .5 : .3 + rnd() * .3) * (dir === 'E' ? 1 : -1), spr: vehicle(big ? 'ferry' : 'sampan', dir, col), r: 0 });
+    ents.push({ k: 'boat', y, x: X0 + rnd() * GW, v: (big ? .5 : .3 + rnd() * .3) * (dir === 'E' ? 1 : -1), spr: vehicle(big ? 'ferry' : 'sampan', dir, col), r: 0 });
   }
-  for (let i = 0; i < 260; i++) { const x = rnd() * MW, y = 155.5 + rnd() * 20; sparkles.push([x, y, rnd() * 6.28]); }
+  for (let i = 0; i < 300; i++) { const x = X0 + rnd() * GW, y = 155.5 + rnd() * 20; sparkles.push([x, y, rnd() * 6.28]); }
 }
 
 // ── vignettes: a few people doing one slow thing, at one place, at certain hours ──
@@ -1067,7 +1120,7 @@ const jit = (w, n = 30) => [w[0] + Math.floor(V() * n), w[1] - Math.floor(V() * 
 const anchor = (c, ax, ay) => Object.assign(c, { ax, ay });
 function pix(w, h, fn) { const c = mk(w, h), g = c.getContext('2d'); fn((x, y, ww, hh, col) => { g.fillStyle = col; g.fillRect(x, y, ww, hh); }); return c; }
 function thing(x0, y0, x1, y1, h, pad, draw) {         // a small iso object drawn around the origin
-  const s = spr(x0, y0, x1, y1, h, pad, false); draw(s.g); return anchor(s.cv, -s.left, OY - s.top);
+  const s = spr(x0, y0, x1, y1, h, pad, false); draw(s.g); return anchor(s.cv, SX0 - s.left, OY - s.top);
 }
 function vig(x, y, pics, o = {}) {                     // seq: [[picture, seconds], …] played in a loop
   const seq = o.seq || [[0, 1]], tot = seq.reduce((a, q) => a + q[1], 0);
@@ -1396,7 +1449,7 @@ const phaseName = m => (m >= 300 && m < 600 ? ['နံနက်', 'Morning'] : m
 const busy = m => (m < 300 ? .15 : m < 360 ? .35 : m < 1260 ? 1 : m < 1380 ? .5 : .2);
 
 // ── runtime ──────────────────────────────────────────────────────────────────
-const cv = document.getElementById('c'), ctx = cv.getContext('2d'), fb = mk(1, 1), fg = fb.getContext('2d');
+const cv = document.getElementById('c'), ctx = cv.getContext('2d'), fb = document.createElement('canvas'), fg = fb.getContext('2d');   // the frame is composed on the GPU
 let ST, EM, drawList = [], zoom = Q.get('z') === '2' ? 2 : 1, camX = 0, camY = 0, vw = 1, vh = 1, T = 0, mins = 0, lt = light(0), density = 1, lastClock = -1;
 function resize() {
   const dpr = window.devicePixelRatio || 1;
@@ -1434,11 +1487,11 @@ function update(dt) {
     } else if (e.k === 'vig') {
       if (e.tick) e.tick(e);
     } else if (e.k === 'boat') {
-      e.x += e.v * dt; if (e.x > MW + 3) e.x = -3; if (e.x < -3) e.x = MW + 3;
+      e.x += e.v * dt; if (e.x > MW + 3) e.x = X0 - 3; if (e.x < X0 - 3) e.x = MW + 3;
     }
   }
   for (const b of birds) b.a += b.w * dt;
-  for (const c of crows) { c.x += c.vx * dt; c.y += c.vy * dt; if (c.x > MW + 5) { c.x = -5; c.y = rnd() * 150; } if (c.y < 0 || c.y > 160) c.vy = -c.vy; }
+  for (const c of crows) { c.x += c.vx * dt; c.y += c.vy * dt; if (c.x > MW + 5) { c.x = X0 - 5; c.y = Y0 + rnd() * 180; } if (c.y < 0 || c.y > 160) c.vy = -c.vy; }
 }
 
 // ── traffic lights at the main crossings: cars slow down, stop at red and queue ──
@@ -1457,7 +1510,7 @@ function fillGrid() {
   cars.sort((a, b) => a.id - b.id);
   const at = (c, d) => { const [x, y] = lanePos(c.L, (c.s + d + c.L.len) % c.L.len); return tk(x, y); };
   for (const c of cars) for (let d = -c.hl; d <= c.hl + .01; d += .25) { const k = at(c, d); if (!foot.has(k)) foot.set(k, c); }
-  for (const c of cars) { const k = at(c, c.hl + .5); if (!claim.has(k) && !foot.has(k)) claim.set(k, c); }
+  for (const c of cars) for (let d = c.hl + .3; d <= c.hl + .3 + c.v * .6; d += .5) { const k = at(c, d); if (!claim.has(k) && !foot.has(k)) claim.set(k, c); }   // about a braking distance ahead
 }
 function blocker(c) {                                              // the other lane's car in, or holding, a tile just ahead
   for (let d = c.hl + .05; d <= c.hl + 1.5; d += .25) {
@@ -1471,7 +1524,8 @@ function blocker(c) {                                              // the other 
 function crossRoom(c) {
   const b = blocker(c); if (!b) return Infinity;
   const [o, d] = b, back = blocker(o);
-  if (back && back[0] === c && c.id < o.id) return Infinity;         // each waiting on the other: the older car goes
+  if (back && back[0] === c) { const tc = d / Math.max(c.v, .3), to = back[1] / Math.max(o.v, .3); if (tc < to || (tc === to && c.id < o.id)) return Infinity; }
+  // each waiting on the other: whoever would get there first goes
   return d - c.hl - .3;
 }
 function drive(L, dt) {
@@ -1673,8 +1727,8 @@ addEventListener('resize', resize);
   colonial(...LM.usemb, 4, '#E7D08E'); colonial(...LM.meie, 3, '#BFBAB0');
   colonial(...LM.divcourt, 3, '#A5452F', { f: 's', t: signTex('တိုင်းတရားရုံး', 'DIVISION COURT', '#EFE6D6', '#6B2A1F') });
   for (const [k, h] of Object.entries({ hall: 40, mosque: 32, fire: 38, shangri: 232, sakura: 164, shae: 82, sulecin: 82, church: 30, court: 40, temple: 14 })) mark(...LM[k], h);
-  for (let y = CY - 5; y < CY + 5; y++) for (let x = CX - 5; x < CX + 5; x++) if (rbd(x, y) < 5) HT[y * MW + x] = 70;
-  lots(); props();
+  for (let y = CY - 5; y < CY + 5; y++) for (let x = CX - 5; x < CX + 5; x++) if (rbd(x, y) < 5) HT[ix(x, y)] = 70;
+  lots(); props(); grow();
   ST = mk(CW, CH); EM = mk(CW, CH);
   const sg = ST.getContext('2d'), eg = EM.getContext('2d');
   ground(sg);

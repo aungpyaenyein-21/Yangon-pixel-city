@@ -1261,6 +1261,44 @@ function marketLife() {
   shutters(FRONT[0], -.4, 3.3, true);
   clockHands();
 }
+// the station building (1954): three storeys, 200 m along the tracks; seen from the south-west we get its track side —
+// mustard walls, white window surrounds, a dark green roof — and four white towers crowned with gilded pyatthat
+const SC = { wall: '#D4A340', trim: '#F6F1E4', white: '#F2EEE4', roof: '#2F5E46', glass: '#34404E' };
+const STOWERS = [104.5, 111, 120, 128.3];
+function stationBuilding() {
+  const [x0, y0, x1, y1] = STB, H = 44, s = spr(x0, y0, x1, y1, H + 20, 4), g = s.g, e = glow(s);
+  mark(Math.floor(x0), Math.floor(y0), Math.ceil(x1), Math.ceil(y1), H);
+  box(g, x0, y0, x1, y1, 0, H, SC.wall, '#A69A84');
+  const [wf, sf] = faces(x0, y0, x1, y1);
+  fr(g, wf, wf.a, wf.b, 0, H, SC.white);                               // the west end is white, like the front
+  for (const f of [wf, sf]) {
+    for (let u = f.a + .3; u < f.b - .6; u += 1.2) {                  // tall doors onto platform 1 below, windows above
+      fr(g, f, u, u + .6, 0, 13, sh(SC.trim, f.s)); fr(g, f, u + 1 / 12, u + .6 - 1 / 12, 0, 12, sh('#3A2E28', f.s)); fr(e, f, u + 1 / 12, u + .6 - 1 / 12, 2, 11, '#FFD98A');
+      for (const z of [18, 31]) { fr(g, f, u + .05, u + .55, z - 1, z + 9, sh(SC.trim, f.s)); fr(g, f, u + .12, u + .48, z, z + 8, sh(SC.glass, f.s)); if (chance(.35)) fr(e, f, u + .12, u + .48, z, z + 8, pick(LIT)); }
+    }
+    for (const z of [15, 28]) fr(g, f, f.a, f.b, z, z + 1, sh(SC.trim, f.s));
+    fr(g, f, f.a, f.b, H - 3, H, sh(SC.trim, f.s));
+  }
+  hip(g, x0 - .15, y0 - .15, x1 + .15, y1 + .15, H, 6, SC.roof);
+  const m = (x0 + x1) / 2, t = clockFace();                         // the little clock on a gable over the middle
+  box(g, m - 1, y1 - .4, m + 1, y1, H, H + 12, SC.white, '#E0C060'); fimg(g, sf, m - t.width / 24, H + 2, t); fimg(e, sf, m - t.width / 24, H + 2, t);
+  for (const cx of STOWERS) {                                        // the towers, on the front (north) half
+    const a = cx - 1.3, b = cx + 1.3, c0 = y0 + .2, c1 = y0 + 2.8, TH = 88, ts = spr(a, c0, b, c1, TH + 70, 6), tg = ts.g, te = glow(ts);
+    mark(Math.floor(a), Math.floor(c0), Math.ceil(b), Math.ceil(c1), TH + 40);
+    box(tg, a, c0, b, c1, 0, TH, SC.white, '#D8D2C4');
+    for (const f of faces(a, c0, b, c1)) {
+      for (let z = 20; z < TH - 8; z += 13) { fr(tg, f, f.a + .6, f.b - .6, z, z + 8, sh(SC.glass, f.s)); fr(tg, f, f.a + .5, f.b - .5, z - 1, z, sh('#CFC7B6', f.s)); if (chance(.4)) fr(te, f, f.a + .6, f.b - .6, z, z + 8, pick(LIT)); }
+      fr(tg, f, f.a, f.b, TH - 4, TH, sh('#E0C060', f.s));             // gilded cornice
+    }
+    pyatthat(tg, cx, (c0 + c1) / 2, TH, 1.6, 6, '#D9A93A');
+  }
+}
+function forecourt() {                                               // the car park on Kun Chan Rd, the lawns, the bus stop
+  for (let x = 97; x < 133; x += 1.5) if (chance(.5) && !(x > 118 && x < 121)) parked(x + .6, -34.6, chance(.5) ? 'E' : 'W', chance(.7) ? 'taxi' : 'car');
+  for (const [a, b] of [[101, 106], [110, 123], [127, 132]]) for (let x = a + .7; x < b - .3; x += 1.6) tree(q12(x), -37.2 + (chance(.5) ? .3 : 0), .55 + rnd() * .2);
+  for (let x = 98; x < 134; x += 6) lamp(x + .5, -38.6);
+  busStop(112, -39, 1, 'ဘူတာကြီး');
+}
 function grow() {
   BX = X0; BY = Y0; BE = XE;
   for (let i = sprites.length - 1; i >= 0; i--) if (sprites[i].y1 <= 5.01) sprites.splice(i, 1);
@@ -1300,6 +1338,7 @@ function grow() {
   withSeed(1926, () => {
     market(); railway(); railwayHQ(); junctionCity(); overpass();
     flyover(() => 67, suleZ, -4, -38, false); flyover(pbX, pansZ, 5, Y0 - 2, true);
+    stationBuilding(); forecourt();
     for (let n = 0; n < 40; n++) { const x = CATH[0] + .5 + rnd() * (CATH[2] - CATH[0] - 1), y = CATH[1] + .5 + rnd() * (CATH[3] - CATH[1] - 1.5); if (free1(x, y)) tree(q12(x), q12(y), 1 + rnd() * .6); }   // Holy Trinity's grounds
     lots(); fill(X0, Y0, XE, MH, PLAZA, 0);
     for (let x = -3; x > X0; x -= 5) { tree(x + .5, 153.5, 1 + rnd() * .4); lamp(x - 2, 154.4); }

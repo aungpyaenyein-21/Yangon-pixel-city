@@ -1138,17 +1138,54 @@ function trainSet(col, band) {                                     // one carria
     box(g, -1.55, -.3, 1.55, .3, 14, 16, '#8E949A', '#A9AEB3');
   });
 }
-// a train: cars along a track; at(T) → distance of the lead car along the track (or null when away)
-function addTrain(track, cars, at) { trains.push({ pts: TRK[track], L: trackLen(TRK[track]), cars, at }); }
+// a train: cars along a track; at() → distance of the lead car along it, or null while it's away
+function addTrain(pts, cars, at) { trains.push({ pts, L: trackLen(pts), cars, at }); }
+function run(s0, s1, t, v, D = 8) {                                // from s0 to s1: cruise, then brake over the last D tiles
+  const a = v * v / (2 * D), t0 = Math.max(0, (s1 - s0 - D) / v), td = 2 * D / v;
+  if (t < t0) return s0 + v * t;
+  if (t < t0 + td) { const u = t - t0; return s1 - D + v * u - a * u * u / 2; }
+  return s1;
+}
+const dur = (s0, s1, v, D = 8) => Math.max(0, (s1 - s0 - D) / v) + 2 * D / v;
 function railLife() {
-  const blue = trainSet('#2C4E8A', '#1E2A38'), maroon = trainSet('#8E2F24', '#2A2020');
-  for (const [k, car, n, v] of [[0, blue, 5, 2.6], [1, maroon, 6, -2.2]]) {
-    const L = trackLen(TRK[k]) + 30, ph = V() * L;
-    addTrain(k, Array(n).fill(car), () => { const s = ((T * v + ph) % L + L) % L; return v > 0 ? s : L - 30 - s; });
+  const circle = trainSet('#ECECE8', '#2A4FA8'), maroon = trainSet('#8E2F24', '#EDE3C8'), loco = thing(-1.2, -.35, 1.2, .35, 30, 3, g => {
+    box(g, -1.2, -.35, 1.2, .35, 0, 3, '#2A2A2A'); box(g, -1.2, -.35, 1.2, .35, 3, 13, '#C8502E', sh('#C8502E', 1.1));
+    for (const f of faces(-1.2, -.35, 1.2, .35)) fr(g, f, f.a, f.b, 7, 9, sh('#EDE3C8', f.s));
+    box(g, -.3, -.3, .6, .3, 13, 17, '#C8502E', '#D8653F');
+  });
+  // the Circle Line: in from the west on the main line, over the turnout to platform 6/7, a stop, then away east;
+  // and the other way round. One train each way every 6 minutes of screen time.
+  const cp = [[X0 - 40, TMAIN[0]], [60, TMAIN[0]], [70, -18.2], [XE + 40, -18.2]], cL = trackLen(cp), stop = trackLen([[X0 - 40, TMAIN[0]], [60, TMAIN[0]], [70, -18.2], [128, -18.2]]);
+  const back = cp.slice().reverse(), bstop = cL - trackLen([[X0 - 40, TMAIN[0]], [60, TMAIN[0]], [70, -18.2], [96, -18.2]]);
+  for (const [pts, st, ph] of [[cp, stop, 0], [back, bstop, 180]]) {   // each way in turn, never both on the one track
+    const P = 360, v = 2.6, dwell = 45, t1 = dur(0, st, v);
+    addTrain(pts, Array(5).fill(circle), () => {
+      if (!inWin(mins, [330, 1310])) return null;
+      const t = (T + ph) % P;
+      if (t < t1) return run(0, st, t, v);
+      if (t < t1 + dwell) return st;
+      const u = t - t1 - dwell, s = st + (u < 2 * 8 / v ? v * u * u / (4 * 8 / v) : 8 + v * (u - 2 * 8 / v));   // pull away gently
+      return s > cL ? null : s;
+    });
   }
+  // long-distance departures (seat61): standing at the platform for an hour, then away east on time
+  const dep = (pts, mins0, n) => {
+    const standAt = trackLen([pts[0], [131, pts[0][1]]]), L = trackLen(pts);
+    addTrain(pts, Array(n).fill(maroon), () => {
+      const m = mins - mins0;                                      // minutes after departure time
+      if (m < -60 || m > 3) return null;
+      if (m < 0) return standAt;
+      const u = m * 60, s = standAt + (u < 12 ? .1 * u * u : 14.4 + 2.4 * (u - 12));
+      return s > L ? null : s;
+    });
+  };
+  const p1 = [[X0 - 40, TMAIN[1]], [XE + 40, TMAIN[1]]], p2 = [[X0 - 40, TMAIN[0]], [XE + 40, TMAIN[0]]];
+  dep(p1, 300, 8); dep(p2, 390, 6); dep(p1, 900, 9); dep(p2, 945, 8);   // Mandalay 5:00, Mawlamyine 6:30, Mandalay 15:00 and 15:45
+  // a shunter in the yard, pottering between the sheds
+  const yp = TRK[8], yL = trackLen(yp), a0 = trackLen([yp[0], [100, yp[0][1]]]);
+  addTrain(yp, [loco], () => { if (!inWin(mins, [360, 1260])) return null; const t = (T % 90) / 90, k = t < .4 ? t / .4 : t < .5 ? 1 : t < .9 ? 1 - (t - .5) / .4 : 0, e = k * k * (3 - 2 * k); return Math.min(yL, a0 + 24 * e); });
 }
 function drawTrains(X, Y) {
-  if (!inWin(mins, [320, 1350])) return;
   for (const t of trains) {
     const s0 = t.at(); if (s0 == null) continue;
     t.cars.forEach((car, i) => {
@@ -1327,7 +1364,7 @@ function yard() {
   }
   const liv = [['#8E2F24'], ['#8E2F24'], ['#7A2A22'], ['#2C4E8A'], ['#9A3B2A', '#9A3B2A']];   // cream over maroon, the odd blue set, red boxcars
   for (let k = 0; k < 10; k++) {
-    if (chance(.3)) continue;
+    if (chance(.3) || k === 2) continue;                              // track 2 is the shunter's
     const y = -14.6 + k * 1.2, [col, band] = pick(liv); let x = 78 + (k % 4) * 2 + rnd() * 8;
     const end = x + 3.4 * ri(3, 8);
     for (; x < Math.min(end, 131); x += 3.4) if (!(x > 115 && x < 131 && y > -13.2 && y < -10.8) && !(x > 83 && x < 99 && y > -12.7 && y < -6.8)) coach(x + 1.6, y, col, band);

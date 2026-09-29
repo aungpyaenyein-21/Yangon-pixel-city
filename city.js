@@ -996,9 +996,9 @@ function mkBlock(x0, y0, x1, y1, H, arcade = true) {               // one stretc
   mark(Math.floor(x0), Math.floor(y0), Math.ceil(x1), Math.ceil(y1), H);
   box(g, x0, y0, x1, y1, 0, H, MK.wall, '#C9BCA0');
   for (const f of faces(x0, y0, x1, y1)) {
-    if (arcade) arches(g, e, f, 0, 12, MK.arch, MK.dark, .7); else fr(g, f, f.a, f.b, 0, 2, sh('#CDBF9F', f.s));
+    if (arcade) arches(g, null, f, 0, 12, MK.arch, MK.dark); else fr(g, f, f.a, f.b, 0, 2, sh('#CDBF9F', f.s));
     fr(g, f, f.a, f.b, 12, 14, sh(MK.trim, f.s));
-    arches(g, e, f, 14, 9, MK.trim, MK.glass, .3);
+    arches(g, e, f, 14, 9, MK.trim, MK.glass, .12);                  // a few offices upstairs
     fr(g, f, f.a, f.b, H - 3, H, sh(MK.trim, f.s));
     for (let u = f.a; u <= f.b; u += 1) fr(g, f, Math.max(f.a, u - 1 / 12), Math.min(f.b, u + 1 / 12), 12, H - 3, sh(MK.trim, f.s * .96));   // pilasters
   }
@@ -1006,12 +1006,11 @@ function mkBlock(x0, y0, x1, y1, H, arcade = true) {               // one stretc
   return s;
 }
 function pavilion(x0, y0, x1, y1, H) {                               // the end blocks: taller, one great red arch on each face
-  const s = mkBlock(x0, y0, x1, y1, H), g = s.g, e = glow(s);
+  const s = mkBlock(x0, y0, x1, y1, H), g = s.g;
   for (const f of faces(x0, y0, x1, y1)) {
     const m = (f.a + f.b) / 2;
     fr(g, f, m - .9, m + .9, 14, H - 4, sh(MK.arch, f.s)); fr(g, f, m - .7, m + .7, 14, H - 6, sh(MK.glass, f.s));
     fr(g, f, m - .9, m - .6, H - 6, H - 4, sh(MK.wall, f.s)); fr(g, f, m + .6, m + .9, H - 6, H - 4, sh(MK.wall, f.s));
-    fr(e, f, m - .7, m + .7, 16, H - 7, '#FFE2A0');
   }
 }
 const clockFace = () => pix(9, 9, P => { P(2, 0, 5, 9, '#3A2E28'); P(0, 2, 9, 5, '#3A2E28'); P(1, 1, 7, 7, '#3A2E28'); P(2, 1, 5, 7, '#FFFBEF'); P(1, 2, 7, 5, '#FFFBEF'); });
@@ -1021,7 +1020,7 @@ function clockTower() {
   box(g, x0, y0, x1, y1, 0, H, MK.wall, '#C9BCA0');
   for (const f of faces(x0, y0, x1, y1)) {
     const m = (f.a + f.b) / 2;
-    fr(g, f, m - .8, m + .8, 0, 13, sh(MK.arch, f.s)); fr(g, f, m - .6, m + .6, 0, 12, sh(MK.dark, f.s)); fr(e, f, m - .6, m + .6, 2, 11, '#FFCF7A');   // the main gate
+    fr(g, f, m - .8, m + .8, 0, 13, sh(MK.arch, f.s)); fr(g, f, m - .6, m + .6, 0, 12, sh(MK.dark, f.s));   // the main gate
     fr(g, f, f.a, f.b, 13, 15, sh(MK.trim, f.s));
     arches(g, e, f, 15, 9, MK.trim, MK.glass, .4);
     fr(g, f, f.a, f.b, 26, 28, sh(MK.trim, f.s));
@@ -1034,10 +1033,10 @@ function clockTower() {
   lathe(g, cx, cy, H + 17, 6, t => .12 * (1 - t / 6) + .03, GOLD, GOLD[0]);
 }
 function shed(x0, y0, x1, y1) {                                     // green tin roof over rows of stalls
-  const H = 9, s = spr(x0, y0, x1, y1, H + 16, 4), g = s.g, e = glow(s);
+  const H = 9, s = spr(x0, y0, x1, y1, H + 16, 4), g = s.g;
   box(g, x0, y0, x1, y1, 0, H, '#D8D0BE', '#B9B1A1');
   for (const f of faces(x0, y0, x1, y1)) {
-    fr(g, f, f.a + .1, f.b - .1, 0, 7, sh('#3A302A', f.s)); fr(e, f, f.a + .1, f.b - .1, 2, 7, '#FFD690');
+    fr(g, f, f.a + .1, f.b - .1, 0, 7, sh('#3A302A', f.s));   // dark at night: the market shuts at 5
     for (let u = f.a + .2; u < f.b - .2; u += 1 / 12) if (chance(.55)) fr(g, f, u, u + 1 / 12, ri(0, 2), ri(3, 6), pick(GOODS));
   }
   hip(g, x0 - .2, y0 - .2, x1 + .2, y1 + .2, H, 6, '#4E8F5C');
@@ -1137,6 +1136,83 @@ function overpass() {                                              // the footbr
     for (let i = n - 1; i >= 0; i--) { const z = Math.round(FB + 3 - (i + 1) * (FB + 2) / n); box(s.g, x1 + i * d, yy, x1 + (i + 1) * d, yy + .8, 0, Math.max(1, z), '#BDB7AB', '#D2CDC2'); }
     void y;
   }
+}
+// ── life at the market: open 9:00–17:00, closed on Mondays (Yangon's weekday; ?d=mon to preview) ──
+let mon = null;
+const MONDAY = () => (mon ??= (Q.get('d') || new Intl.DateTimeFormat('en-US', { timeZone: 'Asia/Yangon', weekday: 'short' }).format(new Date())).toLowerCase().startsWith('mon'));
+const marketOpen = () => !MONDAY() && inWin(mins, [540, 1020]);
+function walkLoop(pts, L, sp, win, show) {                          // someone walking back and forth along a polyline
+  const pics = [standing(L, 'walk1', false), standing(L, 'walk2', false), standing(L, 'walk1', true), standing(L, 'walk2', true)];
+  const seg = [], lens = []; let tot = 0;
+  for (let i = 1; i < pts.length; i++) { const l = Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]); seg.push([pts[i - 1], pts[i]]); lens.push(l); tot += l; }
+  const ph = V() * tot * 2, e = vig(pts[0][0], pts[0][1], pics, { win, show, tick: e => {
+    let u = (T * sp + ph) % (tot * 2); const back = u > tot; if (back) u = tot * 2 - u;
+    let i = 0; while (i < lens.length - 1 && u > lens[i]) u -= lens[i++];
+    const [[ax, ay], [bx, by]] = seg[i], t = lens[i] ? u / lens[i] : 0, dx = (bx - ax) * (back ? -1 : 1), dy = (by - ay) * (back ? -1 : 1);
+    e.x = ax + (bx - ax) * t; e.y = ay + (by - ay) * t;
+    e.cur = pics[(dx < 0 || dy > 0 ? 0 : 2) + Math.floor(T * 3 + ph) % 2];
+  } });
+  return e;
+}
+function shutters(x0, x1, y, west) {                                 // roll-down shutters over one run of arcade arches, when shut
+  const f = west ? { w: 1, k: x0, a: y, b: x1 } : { w: 0, k: y, a: x0, b: x1 };
+  for (let u = f.a; u < f.b - .5; u++) {
+    const ex = west ? x0 : u + .5, ey = west ? u + .5 : y, c0 = west ? sx(x0, u) : sx(u, y);
+    vig(ex + (west ? -.02 : 0), ey + (west ? 0 : .02), [], { z: 0, show: () => !marketOpen(), draw: () => {
+      drawEnt({ width: 14, height: 30, paint: g => { fr(g, f, u + 4 / 12, u + 8 / 12, 2, 11, sh('#8C8F93', f.w ? 1 : .8)); for (let z = 3; z < 11; z += 2) fr(g, f, u + 4 / 12, u + 8 / 12, z, z + 1, sh('#6E7176', f.w ? 1 : .8)); } },
+        c0, (west ? bw(c0, x0) : bs(c0, y)) - 20, ex, ey);
+    } });
+  }
+}
+function clockHands() {                                             // the clock faces show Yangon time
+  const [x0, y0, x1, y1] = TOWER, zc = 35;
+  for (const west of [false, true]) {
+    const cx = west ? x0 : (x0 + x1) / 2, cy = west ? (y0 + y1) / 2 : y1, X = sx(cx, cy), Y = sy(cx, cy, zc), k = west ? .5 : -.5;
+    vig(cx, cy + .01, [], { z: 0, draw: () => {
+      const a = (mins / 60 % 12) / 12 * 2 * Math.PI, b = (mins % 60) / 60 * 2 * Math.PI;
+      drawEnt({ width: 9, height: 9, paint: g => {
+        g.fillStyle = '#2A2A2A';
+        for (const [ang, len] of [[a, 2], [b, 3]]) for (let r = 0; r <= len; r++) {
+          const h = Math.round(r * Math.sin(ang)), px = X + h, py = Math.round(Y + h * k - r * Math.cos(ang));
+          g.fillRect(px, py, 1, 1); glows.push([px, py, '#2A2A2A', 1, 1]);   // over the lit face at night too
+        }
+      } }, X - 4, Y - 4, cx, cy);
+    } });
+  }
+}
+function marketLife() {
+  const shop = () => marketOpen(), quiet = () => !MONDAY() && !marketOpen() && inWin(mins, [360, 1140]);
+  const lanes = [[[-14.4, -19], [-14.4, -8]], [[-2.2, -20], [-2.2, -1.6]], [[10.9, -19], [10.9, -8]], [[-12.8, -1.6], [8.6, -1.6]],
+    [[-16.8, -15.8], [13.9, -15.8]], [[-16.8, -11.4], [13.9, -11.4]], [[-16.8, -7], [-11.5, -7], [-11.5, -2.6], [7.2, -2.6]]];
+  for (let i = 0; i < 22; i++) {                                     // shoppers and tourists in the cobbled lanes
+    const L = look(i % 5 === 0 ? 'man' : undefined); if (i % 4 === 0) L.hat = 1;
+    walkLoop(V.pick(lanes), L, .25 + V() * .15, jit([540, 1020], 50), shop);
+  }
+  for (let i = 0; i < 10; i++) {                                     // along the front: to and from the gates
+    const L = look(); if (i % 3 === 0) L.hat = 1;
+    walkLoop([[-19.5, 5.4], [16.5, 5.4]], L, .3 + V() * .15, jit([500, 1080], 60));
+  }
+  for (const [x, y] of [[-1.2, 4.6], [-5.5, 4.5], [13.9, 4.5]]) {   // money changers and touts by the gates
+    const L = look('man');
+    vig(x, y, [standing(L, 'idle', false), standing(L, 'wave', false)], { win: jit([560, 1000], 40), show: shop, seq: [[0, 2 + V() * 3], [1, .9], [0, 1 + V() * 2], [1, .7]] });
+  }
+  const load = c => { const d = dup(c); const g = d.getContext('2d'); g.fillStyle = '#C9A15A'; g.fillRect(1, 0, 5, 2); g.fillStyle = '#A5823F'; g.fillRect(1, 1, 5, 1); return d; };
+  for (let i = 0; i < 3; i++) {                                      // porters: a bundle on the head, gate to taxi and back
+    const L = look('man'), pics = ['walk1', 'walk2'].flatMap(p => [false, true].map(b => load(standing(L, p, b))));
+    const x = V.pick([-2.2, -17.9, 13.9]), sp = .22, ph = V() * 20;
+    vig(x, 3.6, pics, { win: jit([560, 1000], 40), show: shop, tick: e => {
+      const t = (T * sp + ph) % 4, back = t > 2; e.x = x + (back ? 4 - t : t) * .8; e.y = 3.6 + (back ? 4 - t : t) * .4;
+      e.cur = pics[(back ? 1 : 0) + Math.floor(T * 3 + ph) % 2 * 2];
+    } });
+  }
+  for (const [x, y] of [[4.6, 4.5], [-9.3, 4.5]]) {                 // taxi drivers waiting for a fare
+    const L = look('man');
+    vig(x, y, [standing(L, 'idle', false), standing(L, 'idle2', false)], { win: jit([540, 1080], 40), seq: [[0, 5 + V() * 5], [1, 2]] });
+  }
+  for (let i = 0; i < 4; i++) walkLoop([[-2.2, -1.6], [-2.2, 4.4]], look(), .25, jit([700, 1000], 60), quiet);   // the odd person after hours
+  for (const [a, b, y] of [[FRONT[0] + 3.5, TOWER[0], FRONT[3]], [TOWER[2], FRONT[2] - 3.5, FRONT[3]], [FRONT[0], FRONT[0] + 3.5, 3.3], [FRONT[2] - 3.5, FRONT[2], 3.3]]) shutters(a, b, y, false);
+  shutters(FRONT[0], -.4, 3.3, true);
+  clockHands();
 }
 function grow() {
   BX = X0; BY = Y0;
@@ -1823,7 +1899,7 @@ function render() {
   if (lt.L > .01) {
     fg.globalAlpha = Math.min(1, lt.L); fg.drawImage(EM, X, Y, vw, vh, 0, 0, vw, vh);
     for (const [c, dx, dy] of lights) fg.drawImage(c, dx - X, dy - Y);
-    for (const [gx, gy, col] of glows) { fg.fillStyle = col; fg.fillRect(gx - X, gy - Y, 3, 2); }
+    for (const [gx, gy, col, w = 3, h = 2] of glows) { fg.fillStyle = col; fg.fillRect(gx - X, gy - Y, w, h); }
     fg.globalAlpha = 1;
   }
   const k = zoom * cv.width / innerWidth;
@@ -1902,7 +1978,7 @@ addEventListener('resize', resize);
     if (s.ecv) eg.drawImage(s.ecv, s.left, s.top);
     s.ecv = s.eg = s.g = null;
   }
-  populate(); setupSignals(); riverside(); suleLife(); parkLife(); upperLife(); bridgeWalkers(); railLife();
+  populate(); setupSignals(); riverside(); suleLife(); parkLife(); upperLife(); bridgeWalkers(); railLife(); marketLife();
   resize(); camX = sx(CX, CY) - vw / 2; camY = sy(CX, CY, 60) - vh / 2; clampCam();
   document.getElementById('load').remove();
   tick(); setInterval(tick, 1000);
